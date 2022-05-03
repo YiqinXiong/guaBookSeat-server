@@ -65,6 +65,9 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# sqlite stuff
+*.db
+
 # Scrapy stuff:
 .scrapy
 
@@ -104,6 +107,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.flaskenv
 env/
 venv/
 ENV/
@@ -127,3 +131,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# PyCharm stuff
+.idea/

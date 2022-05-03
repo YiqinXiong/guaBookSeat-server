@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    {% if current_user.is_authenticated %}
+        {% if config %}
+            <p>订座设置：</p>
+            <ul class="movie-list">
+                <li>学号：{{ config.student_id }}</li>
+                <li>自习室：{{ config.content_id }}</li>
+                <li>开始时间：{{ config.start_time }}:00 容许误差：{{ config.start_time_delta_limit }}小时</li>
+                <li>持续时间：{{ config.duration }}小时 容许误差：{{ config.duration_delta_limit }}小时</li>
+                <li>预期座号（0表示随机）：{{ config.target_seat }}</li>
+                <li><a href="/set-config">修改订座信息</a></li>
+            </ul>
+            <p>自动预约：</p>
+            <ul class="movie-list">
+                {% if auto_booking_info.enable %}
+                    <li>运行中，任务id：{{ auto_booking_info.task_id }}，下次运行时间：{{ auto_booking_info.next_order_time }}</li>
+                    <li><a href="{{ url_for('set_auto_booking') }}">修改运行时间</a></li>
+                    <li><a href="{{ url_for('disable_auto_booking') }}">关闭自动预约</a></li>
+                {% else %}
+                    <li>未开启自动预约
+                        <span class="float-right">
+                            <a class="imdb" href="{{ url_for('set_auto_booking') }}">开启</a>
+                        </span>
+                    </li>
+                {% endif %}
+            </ul>
+            <p>预约历史（最近10条）：</p>
+            <ul class="movie-list">
+                {% for history in histories[:10] %}  {# 迭代 histories 变量 #}
+                    <li>{{ history.loc }} - {{ history.seat }} - {{ history.time }} - {{ history.status }}</li>
+                    {# 等同于 history['loc'] #}
+                {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
+            </ul>
+        {% else %}
+            <ul class="movie-list">
+                <li>尚未设置订座信息！
+                    <span class="float-right">
+{#                        <a class="btn" href="{{ url_for('edit', movie_id=movie.id) }}">Edit</a>#}
+{#                        <form class="inline-form" method="post" action="{{ url_for('delete', movie_id=movie.id) }}">#}
+{#                        <input class="btn" type="submit" name="delete" value="Delete" onclick="return confirm('Are you sure?')">#}
+{#                        </form>#}
+                        <a class="imdb" href="{{ url_for('set_config') }}" target="_blank" title="SetConfig">设置</a>
+                    </span>
+                </li>
+            </ul>
+        {% endif %}
+    {% else %}
+        <h3>登录</h3>
+        <form method="post" action="{{ url_for('login') }}">
+            用户名<br>
+            <input type="text" name="username" required><br><br>
+            密 码<br>
+            <input type="password" name="password" required><br><br>
+            <a class="btn" href="{{ url_for('logon') }}">注册账号</a>
+            <input class="btn" type="submit" name="submit" value="立即登录">
+        </form>
+    {% endif %}
+{% endblock %}

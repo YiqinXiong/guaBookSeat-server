@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ch">
+<head>
+    {% block head %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>呱，要订座吗？ {{ user.username }}</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" type="text/css">
+    {% endblock %}
+</head>
+<body>
+    {% for message in get_flashed_messages() %}
+        <div class="alert">{{ message }}</div>
+    {% endfor %}
+    <h2>
+        <img alt="Avatar" class="avatar" src="{{ url_for('static', filename='favicon.png') }}">
+        呱，要订座吗？ {{ user.username }}
+    </h2>
+    <nav>
+        <ul>
+            <li><a href="{{ url_for('index') }}">主页</a></li>
+            {% if current_user.is_authenticated %}
+            <li><a href="{{ url_for('set_config') }}">设置订座信息</a></li>
+                {% if config %}
+                    <li><a href="{{ url_for('set_auto_booking') }}">设置自动预约</a></li>
+                {% endif %}
+            <li><a href="{{ url_for('logout') }}">注销</a></li>
+            {% else %}
+            <li><a href="{{ url_for('logon') }}">注册</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% block content %}{% endblock %}
+    <img alt="Walking Totoro" class="totoro" src="{{ url_for('static', filename='images/sign.jpg') }}">
+    <footer class="footer">
+        <small>&copy; 2022 <a href="https://github.com/YiqinXiong">YiqinXiong</a></small>
+    </footer>
+</body>
+</html>

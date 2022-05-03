@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>设置自动预约</h2>
+    <a href="{{ url_for('index') }}">返回首页</a>
+    <p>设置表单</p>
+    <ul>
+        <li>预约周期：默认每天（可选单次？）</li>
+        <li>预约时间：默认22:01:10</li>
+    </ul>
+{% endblock %}
