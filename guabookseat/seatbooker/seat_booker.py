@@ -237,7 +237,7 @@ class SeatBooker:
             return SeatBookerStatus.TIME_OUT, None
         return SeatBookerStatus.SUCCESS, response_data["content"]["defaultItems"]
 
-    def cancel_booking(self):
+    def cancel_booking(self, booking_id):
         # 查询预约情况
         # GET get_my_booking_list
         latest_record = None
@@ -245,12 +245,14 @@ class SeatBooker:
             response_data = self.session.get(self.urls['get_my_booking_list'], proxies=self.session.proxies).json()
         except requests.exceptions.ReadTimeout:
             return SeatBookerStatus.TIME_OUT, latest_record
-        latest_record = response_data["content"]["defaultItems"][0]
+        # 找到要删除的预约记录
+        for record in response_data["content"]["defaultItems"]:
+            if record.get("id") == booking_id:
+                latest_record = record
+                break
         # 处理get_my_booking_list结果
         if latest_record["status"] != "0":
             return SeatBookerStatus.UNKNOWN_ERROR, latest_record
-        else:
-            booking_id = latest_record["id"]
         # 开始取消预约
         cancel_booking_url = f'https://jxnu.huitu.zhishulib.com/Seat/Index/cancelBooking' \
                              f'?bookingId={booking_id}&LAB_JSON=1'

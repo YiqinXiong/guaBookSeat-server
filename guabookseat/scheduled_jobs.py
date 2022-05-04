@@ -38,7 +38,7 @@ def history_to_tuple(history):
     return status, start_timestr, end_timestr, room_name, seat_num
 
 
-def call_seat_booker_func(conf, func_name, receiver=None):
+def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     if not conf or not func_name:
         return None
     # 实例化
@@ -53,7 +53,7 @@ def call_seat_booker_func(conf, func_name, receiver=None):
         _, res = seat_booker.get_my_histories()
         res = [history_to_tuple(history) for history in res]
     elif func_name == 'cancel_booking':
-        stat, res = seat_booker.cancel_booking()
+        stat, res = seat_booker.cancel_booking(booking_id)
         res = history_to_tuple(res)
         if stat == SeatBookerStatus.SUCCESS:
             # 发邮件（取消成功）
@@ -98,11 +98,11 @@ def auto_booking(conf, receiver=None):
     res_booking, latest_record = seat_booker.loop_get_my_booking_list(max_failed_time=3)
     if res_booking == SeatBookerStatus.SUCCESS:
         # 创建定时取消任务
-        job_id = 'cancel_booking_' + str(time.time())
+        job_id = 'cancel_booking_' + str(latest_record["id"])
         cancel_time = time.localtime(int(latest_record["time"]) + 60 * 25)  # 开始时间25分钟后如果还没签到就自动取消
         scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
                           run_date=time.strftime("%Y-%m-%d %H:%M:%S", cancel_time),
-                          args=[conf, 'cancel_booking', receiver])
+                          args=[conf, 'cancel_booking', receiver, latest_record["id"]])
         # 发邮件（成功）
         if receiver and receiver != "":
             mail_tuple = history_to_tuple(latest_record)
