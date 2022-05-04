@@ -137,7 +137,8 @@ def set_config():
             userconfig.set_config(config_data=request.form, cur_user_id=current_user.id)
             db.session.commit()
             job_id = 'daily_auto_booking_' + str(current_user.id)
-            scheduler.modify_job(id=job_id, args=[userconfig.get_config(), current_user.mail_address])
+            if scheduler.get_job(id=job_id):
+                scheduler.modify_job(id=job_id, args=[userconfig.get_config(), current_user.mail_address])
             flash('修改订座信息成功！')
             return redirect(url_for('index'))
 
