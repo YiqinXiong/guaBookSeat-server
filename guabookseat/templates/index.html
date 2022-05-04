@@ -2,22 +2,58 @@
 
 {% block content %}
     {% if current_user.is_authenticated %}
+        <h3>订座设置</h3>
         {% if config %}
-            <p>订座设置：</p>
             <ul class="movie-list">
-                <li>学号：{{ config.student_id }}</li>
-                <li>自习室：{{ config.content_id }}</li>
-                <li>开始时间：{{ config.start_time }}:00 容许误差：{{ config.start_time_delta_limit }}小时</li>
-                <li>持续时间：{{ config.duration }}小时 容许误差：{{ config.duration_delta_limit }}小时</li>
-                <li>预期座号（0表示随机）：{{ config.target_seat }}</li>
-                <li><a href="/set-config">修改订座信息</a></li>
+                <li><b>学号：</b>
+                    <span class="float-right">
+                        {{ config.student_id }}
+                    </span>
+                </li>
+                <li><b>自习室：</b>
+                    <span class="float-right">
+                        {{ valid_rooms[config.content_id] }}
+                    </span>
+                </li>
+                <li>
+                    <b>开始时间：&nbsp&nbsp</b>{{ config.start_time }}:00
+                    <span class="float-right">
+                        <b>容许误差：&nbsp&nbsp</b>{{ config.start_time_delta_limit }}小时
+                    </span>
+                </li>
+                <li>
+                    <b>持续时间：&nbsp&nbsp</b>{{ config.duration }}小时
+                    <span class="float-right">
+                        <b>容许误差：&nbsp&nbsp</b>{{ config.duration_delta_limit }}小时
+                    </span>
+                </li>
+                <li><b>预期座号（0表示随机）：</b>
+                    <span class="float-right">
+                        {{ config.target_seat }}
+                    </span>
+                </li>
+                <li>
+                    <a class="imdb-blue" href="{{ url_for('manual_booking') }}">立即手动预约</a>
+                    <span class="float-right">
+                        <a class="imdb" href="{{ url_for('set_config') }}">修改信息</a>
+                    </span>
+                </li>
             </ul>
-            <p>自动预约：</p>
+            <h3>自动预约</h3>
             <ul class="movie-list">
                 {% if auto_booking_info.enable %}
-                    <li>运行中，任务id：{{ auto_booking_info.task_id }}，下次运行时间：{{ auto_booking_info.next_order_time }}</li>
-                    <li><a href="{{ url_for('set_auto_booking') }}">修改运行时间</a></li>
-                    <li><a href="{{ url_for('disable_auto_booking') }}">关闭自动预约</a></li>
+                    <li>
+                        <b>运行中</b>&nbsp
+                        <a class="imdb-red" href="{{ url_for('disable_auto_booking') }}">关闭自动预约</a>
+                        {% if user.mail_address %}
+                            <br><br><b>邮箱:</b>
+                            {{ user.mail_address }}
+                        {% endif %}
+                        <span class="float-right">
+                            <b>下次运行: </b>{{ auto_booking_info.next_order_time[:-3] }}&nbsp&nbsp
+                            <a class="imdb" href="{{ url_for('set_auto_booking') }}">修改</a>
+                        </span>
+                    </li>
                 {% else %}
                     <li>未开启自动预约
                         <span class="float-right">
@@ -26,21 +62,10 @@
                     </li>
                 {% endif %}
             </ul>
-            <p>预约历史（最近10条）：</p>
-            <ul class="movie-list">
-                {% for history in histories[:10] %}  {# 迭代 histories 变量 #}
-                    <li>{{ history.loc }} - {{ history.seat }} - {{ history.time }} - {{ history.status }}</li>
-                    {# 等同于 history['loc'] #}
-                {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
-            </ul>
         {% else %}
             <ul class="movie-list">
                 <li>尚未设置订座信息！
                     <span class="float-right">
-{#                        <a class="btn" href="{{ url_for('edit', movie_id=movie.id) }}">Edit</a>#}
-{#                        <form class="inline-form" method="post" action="{{ url_for('delete', movie_id=movie.id) }}">#}
-{#                        <input class="btn" type="submit" name="delete" value="Delete" onclick="return confirm('Are you sure?')">#}
-{#                        </form>#}
                         <a class="imdb" href="{{ url_for('set_config') }}" target="_blank" title="SetConfig">设置</a>
                     </span>
                 </li>

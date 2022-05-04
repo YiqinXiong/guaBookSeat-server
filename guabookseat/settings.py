@@ -35,3 +35,12 @@ class MyFlaskConfig(object):
     }
     # 时区
     SCHEDULER_TIMEZONE = str(tzlocal.get_localzone())
+    # --------邮箱Flask-Mail--------
+    MAIL_SERVER = "smtp.qq.com"
+    MAIL_PORT = 465
+    MAIL_USE_SSL = True
+    MAIL_USE_TLS = False
+    MAIL_USERNAME = "foobar@qq.com"
+    MAIL_PASSWORD = "foobarfoobar"
+    MAIL_DEFAULT_SENDER = "foobar@qq.com"
+

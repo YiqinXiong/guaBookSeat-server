@@ -19,14 +19,14 @@ def forge():
     """Generate fake data."""
     db.create_all()
 
-    username = 'xyq6785665'
-    password = 'xyq1999411'
+    username = 'foofoo'
+    password = 'barbar'
 
     configs = [
         {
             'id': 1,
             'student_id': '201826801092',
-            'student_pwd': '666666',
+            'student_pwd': 'foo',
             'content_id': '31',
             'start_time': 9,
             'duration': 13,
@@ -37,7 +37,7 @@ def forge():
         {
             'id': 2,
             'student_id': '201926804010',
-            'student_pwd': 'xiongru010308',
+            'student_pwd': 'bar',
             'content_id': '31',
             'start_time': 8,
             'duration': 10,
@@ -53,7 +53,7 @@ def forge():
     db.session.add(user)
     for c in configs:
         conf = UserConfig()
-        conf.set_config(c)
+        conf.set_config(c, c['id'])
         db.session.add(conf)
     db.session.commit()
     click.echo('Done.')
@@ -64,8 +64,8 @@ def forge():
 @click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True, help='The password used to login.')
 def create_admin(password):
     """Create user."""
-    # db.create_all()
-    user = User.query.first()
+    db.create_all()
+    user = User.query.filter_by(username='admin').first()
     if user is not None:
         click.echo('Updating user...')
         user.username = 'admin'

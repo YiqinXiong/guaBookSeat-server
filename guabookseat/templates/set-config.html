@@ -1,14 +1,92 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>设置订座信息</h2>
-    <a href="{{ url_for('index') }}">返回首页</a>
-    <p>设置表单</p>
-    <ul>
-        <li>学号：</li>
-        <li>自习室：</li>
-        <li>开始时间： | 容许误差：</li>
-        <li>持续时间： | 容许误差：</li>
-        <li>预期座号（0表示随机）：</li>
-    </ul>
+    <h3>设置订座信息</h3>
+    <form method="post">
+        <ul class="movie-list">
+            <li><b>学号：</b>
+                <span class="float-right">
+                    <input type="text" name="student_id" value="{{ config.student_id if config else "" }}" required>
+                </span>
+            </li>
+            <li><b>洄图平台密码：</b>
+                <span class="float-right">
+                    <input type="password" name="student_pwd" value="{{ config.student_pwd if config else "" }}"
+                           required>
+                </span>
+            </li>
+            <li><b>自习室：</b>
+                <span class="float-right">
+                    <select name="content_id">
+                        {% for v_room_id in valid_rooms %}
+                            {% if v_room_id==(config.content_id if config else 36) %}
+                                <option value={{ v_room_id }} selected>{{ valid_rooms[v_room_id] }}</option>
+                            {% else %}
+                                <option value={{ v_room_id }}>{{ valid_rooms[v_room_id] }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </span>
+            </li>
+            <li><b>开始时间：&nbsp&nbsp</b>
+                <select name="start_time">
+                    {% for v_start_time in valid_start_times %}
+                        {% if v_start_time==(config.start_time if config else 9) %}
+                            <option value={{ v_start_time }} selected>{{ v_start_time }}:00</option>
+                        {% else %}
+                            <option value={{ v_start_time }}>{{ v_start_time }}:00</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <span class="float-right">
+                    <b>容许误差：&nbsp&nbsp</b>
+                    <select name="start_time_delta_limit">
+                        {% for v_start_time_delta_limit in valid_start_time_delta_limits %}
+                            {% if v_start_time_delta_limit==(config.start_time_delta_limit if config else 0) %}
+                                <option value={{ v_start_time_delta_limit }} selected>{{ v_start_time_delta_limit }} 小时</option>
+                            {% else %}
+                                <option value={{ v_start_time_delta_limit }}>{{ v_start_time_delta_limit }} 小时</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </span>
+            </li>
+            <li><b>持续时间：&nbsp&nbsp</b>
+                <select name="duration">
+                    {% for v_duration in valid_durations %}
+                        {% if v_duration==(config.duration if config else 13) %}
+                            <option value={{ v_duration }} selected>{{ v_duration }} 小时</option>
+                        {% else %}
+                            <option value={{ v_duration }}>{{ v_duration }} 小时</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <span class="float-right">
+                    <b>容许误差：&nbsp&nbsp</b>
+                    <select name="duration_delta_limit">
+                        {% for v_duration_delta_limit in valid_duration_delta_limits %}
+                            {% if v_duration_delta_limit==(config.duration_delta_limit if config else 0) %}
+                                <option value={{ v_duration_delta_limit }} selected>{{ v_duration_delta_limit }} 小时</option>
+                            {% else %}
+                                <option value={{ v_duration_delta_limit }}>{{ v_duration_delta_limit }} 小时</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </span>
+            </li>
+            <li><b>预期座号（0表示随机）：</b>
+                <span class="float-right">
+                    <input type="number" name="target_seat" value={{ config.target_seat if config else 0 }} min=0
+                           max=999 required>
+                </span>
+            </li>
+            <li>
+                {#                <input type="number" name="config_id" value={{ config.cid if config else 0 }} style="display:none">#}
+                <input type="number" name="config_id" value={{ config.cid if config else 0 }} style="visibility:hidden">
+                <span class="float-center">
+                    <input class="btn" type="submit" name="submit" value="提  交">
+                </span>
+            </li>
+        </ul>
+    </form>
 {% endblock %}

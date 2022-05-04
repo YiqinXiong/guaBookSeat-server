@@ -7,8 +7,9 @@ from guabookseat import db
 
 class User(db.Model, UserMixin):  # 表名将会是 user（自动生成，小写处理）
     id = db.Column(db.Integer, primary_key=True)  # 主键
-    username = db.Column(db.String(20))
+    username = db.Column(db.String(20), unique=True)
     password_hash = db.Column(db.String(128))
+    mail_address = db.Column(db.String(40))
 
     def set_password(self, password):
         # 生成密码哈希值
@@ -31,13 +32,27 @@ class UserConfig(db.Model):
     duration_delta_limit = db.Column(db.Integer)  # 持续时间容许误差（小时）
     target_seat = db.Column(db.Integer)  # 目标座位号
 
-    def set_config(self, config_data):
-        self.id = config_data['id']
+    def set_config(self, config_data, cur_user_id):
+        self.id = cur_user_id
         self.student_id = config_data['student_id']
         self.student_pwd = config_data['student_pwd']
-        self.content_id = config_data['content_id']
-        self.start_time = config_data['start_time']
-        self.duration = config_data['duration']
-        self.start_time_delta_limit = config_data['start_time_delta_limit']
-        self.duration_delta_limit = config_data['duration_delta_limit']
-        self.target_seat = config_data['target_seat']
+        self.content_id = int(config_data['content_id'])
+        self.start_time = int(config_data['start_time'])
+        self.duration = int(config_data['duration'])
+        self.start_time_delta_limit = int(config_data['start_time_delta_limit'])
+        self.duration_delta_limit = int(config_data['duration_delta_limit'])
+        self.target_seat = int(config_data['target_seat'])
+
+    def get_config(self):
+        config_map = {
+            'username': self.student_id,
+            'password': self.student_pwd,
+            'content_id': self.content_id,
+            'start_time': self.start_time,
+            'duration': self.duration,
+            'seat_id': self.target_seat,
+            'category_id': 591,
+            'start_time_delta': self.start_time_delta_limit,
+            'duration_delta': self.duration_delta_limit,
+        }
+        return config_map
