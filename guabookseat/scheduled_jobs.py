@@ -21,6 +21,7 @@ def send_mail(title, body, receiver):
 def history_to_tuple(history):
     status_map = {
         "0": "已预约，等待签到",
+        "1": "使用中",
         "3": "已结束，已签退结束",
         "4": "已取消",
         "5": "已结束，未签到结束",
