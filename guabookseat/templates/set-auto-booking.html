@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h3>设置每日自动预约</h3>
+    <h3>&nbsp&nbsp设置每日自动预约</h3>
     <form method="post">
         <ul class="movie-list">
             <li><b>预约时间（默认22:01）：</b>
@@ -9,7 +9,7 @@
                     <input type="time" name="order_time" value="22:01" required>
                 </span>
             </li>
-            <li><b>邮箱（用于接收预约结果，可不填）：</b>
+            <li><b>邮箱（用于接收预约结果）：</b>
                 <span class="float-right">
                     <input type="email" name="mail_address"
                            value="{{ user.mail_address if user.mail_address else "" }}">
