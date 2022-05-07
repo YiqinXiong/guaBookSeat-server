@@ -319,7 +319,9 @@ class SeatBooker:
             failed_time += 1
             # 若已有预约，直接结束程序
             if stat == SeatBookerStatus.ALREADY_BOOKED:
-                exit(0)
+                now_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"student_id：{self.username} ALREADY_BOOKED! [{now_time_str}]")
+                return SeatBookerStatus.ALREADY_BOOKED
             # 失败max_failed_time次以上退出程序
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED

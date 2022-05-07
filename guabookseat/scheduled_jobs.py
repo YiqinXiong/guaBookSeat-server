@@ -76,6 +76,7 @@ def auto_booking(conf, receiver=None):
     if res_login == SeatBookerStatus.LOOP_FAILED:
         raise
     # 总共尝试10次search_seat和book_seat的过程
+    already_booked = False
     retry_time = 10
     while retry_time > 0:
         try:
@@ -86,34 +87,47 @@ def auto_booking(conf, receiver=None):
                 continue
             # 开始book_seat
             res_book_seat = seat_booker.loop_book_seat(max_failed_time=3)
+            # 若已有预约则退出
+            if res_book_seat == SeatBookerStatus.ALREADY_BOOKED:
+                already_booked = True
+                break
             # 若成功则可以跳出 retry 的大循环
             if res_book_seat == SeatBookerStatus.SUCCESS:
                 break
-        except Exception:
+        except Exception as e:
+            print(e)
             continue
         # 重试机会减少
         time.sleep(2)
         retry_time -= 1
     # 最后获取用户预约信息
-    res_booking, latest_record = seat_booker.loop_get_my_booking_list(max_failed_time=3)
-    if res_booking == SeatBookerStatus.SUCCESS:
-        # 创建定时取消任务
-        job_id = 'cancel_booking_' + str(latest_record["id"])
-        cancel_time = time.localtime(int(latest_record["time"]) + 60 * 25)  # 开始时间25分钟后如果还没签到就自动取消
-        scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
-                          run_date=time.strftime("%Y-%m-%d %H:%M:%S", cancel_time),
-                          args=[conf, 'cancel_booking', receiver, latest_record["id"]])
-        # 发邮件（成功）
-        if receiver and receiver != "":
-            mail_tuple = history_to_tuple(latest_record)
-            title = "[guaBookSeat] 抢到座位啦！"
-            body = f"已预约！<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位自习，记得签到！" \
-                   f"\n若预约开始25分钟后还没签到，则会自动取消预约以防止违约。"
-            send_mail(title, body, receiver)
+    if not already_booked:
+        res_booking, latest_record = seat_booker.loop_get_my_booking_list(max_failed_time=3)
+        if res_booking == SeatBookerStatus.SUCCESS:
+            # 创建定时取消任务
+            job_id = 'cancel_booking_' + str(latest_record["id"])
+            cancel_time = time.localtime(int(latest_record["time"]) + 60 * 25)  # 开始时间25分钟后如果还没签到就自动取消
+            scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
+                              run_date=time.strftime("%Y-%m-%d %H:%M:%S", cancel_time),
+                              args=[conf, 'cancel_booking', receiver, latest_record["id"]])
+            # 发邮件（成功）
+            if receiver and receiver != "":
+                mail_tuple = history_to_tuple(latest_record)
+                title = "[guaBookSeat] 抢到座位啦！"
+                body = f"已预约！<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位自习，记得签到！" \
+                       f"\n若预约开始25分钟后还没签到，则会自动取消预约以防止违约。"
+                send_mail(title, body, receiver)
+        else:
+            # 发邮件（失败）
+            if receiver and receiver != "":
+                title = "[guaBookSeat] 预约失败了，快看看啥情况..."
+                body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
+                       f"\n如有bug请与我（发件邮箱）联系。"
+                send_mail(title, body, receiver)
     else:
-        # 发邮件（失败）
+        # 发邮件（已有预约）
         if receiver and receiver != "":
-            title = "[guaBookSeat] 预约失败了，快看看啥情况..."
-            body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
+            title = "[guaBookSeat] 已有预约，本次预约无效..."
+            body = f"如果实际没有预约，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
                    f"\n如有bug请与我（发件邮箱）联系。"
             send_mail(title, body, receiver)
