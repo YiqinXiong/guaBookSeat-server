@@ -1,3 +1,5 @@
+import threading
+
 from flask import render_template, request, url_for, redirect, flash
 from flask_login import login_user, login_required, logout_user, current_user
 
@@ -174,6 +176,7 @@ def show_booking_list():
 @login_required
 def manual_booking():
     userconfig = UserConfig.query.filter_by(id=current_user.id).first()
-    auto_booking(userconfig.get_config(), current_user.mail_address)
-    flash("手动预约任务已完成！")
+    new_thread = threading.Thread(target=auto_booking, args=(userconfig.get_config(), current_user.mail_address))
+    new_thread.start()
+    flash("手动预约任务正在后台运行！")
     return redirect(url_for('index'))

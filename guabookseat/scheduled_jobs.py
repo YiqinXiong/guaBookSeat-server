@@ -42,7 +42,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     if not conf or not func_name:
         return None
     # 实例化
-    seat_booker = SeatBooker(conf)
+    seat_booker = SeatBooker(conf, app.logger)
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
@@ -69,8 +69,9 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
 def auto_booking(conf, receiver=None):
     if not conf:
         return
+    student_id = conf["username"]
     # 实例化
-    seat_booker = SeatBooker(conf)
+    seat_booker = SeatBooker(conf, app.logger)
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
@@ -95,7 +96,7 @@ def auto_booking(conf, receiver=None):
             if res_book_seat == SeatBookerStatus.SUCCESS:
                 break
         except Exception as e:
-            print(e)
+            app.logger.critical(f"UID:{student_id} catch Exception in booking progress:\n{e}!")
             continue
         # 重试机会减少
         time.sleep(2)
@@ -110,6 +111,7 @@ def auto_booking(conf, receiver=None):
             scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
                               run_date=time.strftime("%Y-%m-%d %H:%M:%S", cancel_time),
                               args=[conf, 'cancel_booking', receiver, latest_record["id"]])
+            app.logger.info(f"UID:{student_id} CREATE AUTO_CANCEL_JOB SUCCESS!")
             # 发邮件（成功）
             if receiver and receiver != "":
                 mail_tuple = history_to_tuple(latest_record)
@@ -118,6 +120,7 @@ def auto_booking(conf, receiver=None):
                        f"\n若预约开始25分钟后还没签到，则会自动取消预约以防止违约。"
                 send_mail(title, body, receiver)
         else:
+            app.logger.error(f"UID:{student_id} BOOK FAILED!")
             # 发邮件（失败）
             if receiver and receiver != "":
                 title = "[guaBookSeat] 预约失败了，快看看啥情况..."

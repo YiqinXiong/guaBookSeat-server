@@ -24,14 +24,14 @@ class MyFlaskConfig(object):
     SCHEDULER_EXECUTORS = {
         'default': {
             'type': 'threadpool',
-            'max_workers': 64
+            'max_workers': 32
         }
     }
     # job默认设置
     SCHEDULER_JOB_DEFAULTS = {
         'coalesce': True,
-        'max_instances': 1,
-        'misfire_grace_time': 120
+        'max_instances': 32,
+        'misfire_grace_time': 600
     }
     # 时区
     SCHEDULER_TIMEZONE = str(tzlocal.get_localzone())

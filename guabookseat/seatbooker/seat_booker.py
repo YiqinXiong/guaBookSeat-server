@@ -33,7 +33,7 @@ class SeatBookerStatus(Enum):
 
 # SeatBooker类
 class SeatBooker:
-    def __init__(self, conf) -> None:
+    def __init__(self, conf, logger=None) -> None:
         # 读取参数配置
         self.uid = None
         self.username = conf['username']
@@ -50,6 +50,8 @@ class SeatBooker:
         self.target_seat_title = ""
         self.start_time_delta = 0
         self.duration_delta = 0
+        # 日志
+        self.logger = logger
         # 建链相关
         fake_header = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -160,6 +162,13 @@ class SeatBooker:
                 valid_duration = response_data["content"]["children"][1]["adjustTime"]
                 valid_start_time_delta = valid_start_time - self.start_time
                 valid_duration_delta = valid_duration - self.duration
+                start_timestr = time.strftime("%m-%d %H:%M", time.localtime(self.start_time))
+                valid_start_timestr = time.strftime("%m-%d %H:%M", time.localtime(valid_start_time))
+                end_timestr = time.strftime("%H:%M", time.localtime(self.start_time + self.duration))
+                valid_end_timestr = time.strftime("%H:%M", time.localtime(valid_start_time + valid_duration))
+                self.logger.debug(f"UID:{self.username} "
+                                  f"target:<{start_timestr} to {end_timestr}> "
+                                  f"adjust:<{valid_start_timestr} to {valid_end_timestr}>!")
                 if not self.is_time_affordable(valid_start_time_delta, valid_duration_delta):
                     return SeatBookerStatus.NOT_AFFORDABLE
                 # 按照系统可用的时间更新预定时间
@@ -287,8 +296,10 @@ class SeatBooker:
                 self.session.proxies.update(proxy)
             # 如果是LOGIN_FAILED，则退出登录流程
             elif stat == SeatBookerStatus.LOGIN_FAILED:
+                self.logger.error(f"UID:{self.username} LOGIN FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
             stat = self.login()
+        self.logger.info(f"UID:{self.username} LOGIN SUCCESS!")
         return SeatBookerStatus.SUCCESS
 
     def loop_search_seat(self, max_failed_time):
@@ -299,16 +310,22 @@ class SeatBooker:
             failed_time += 1
             # 失败max_failed_time次以上退出search_seat流程
             if failed_time > max_failed_time:
+                self.logger.error(f"UID:{self.username} SEARCH_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
             # 2秒重试
             time.sleep(2)
             # 无位置时大幅调整预定时间和时长
             if stat == SeatBookerStatus.NO_SEAT:
+                self.logger.debug(f"UID:{self.username} SEARCH_SEAT NO_SEAT!")
                 self.adjust_conf_randomly(random_range=failed_time, factor=2.5, max_retry_time=200)
             # 系统调整的时间不可接受时小幅调整预定时间和时长
             elif stat == SeatBookerStatus.NOT_AFFORDABLE:
+                self.logger.debug(f"UID:{self.username} SEARCH_SEAT NOT_AFFORDABLE!")
                 self.adjust_conf_randomly(random_range=failed_time, factor=1.5, max_retry_time=100)
+            elif stat == SeatBookerStatus.STATUS_CODE_ERROR:
+                self.logger.warning(f"UID:{self.username} status_code != 200 !")
             stat = self.search_seat()
+        self.logger.info(f"UID:{self.username} valid_seat:#{self.target_seat_title} seat_id:{self.target_seat}!")
         return SeatBookerStatus.SUCCESS
 
     def loop_book_seat(self, max_failed_time):
@@ -319,15 +336,16 @@ class SeatBooker:
             failed_time += 1
             # 若已有预约，直接结束程序
             if stat == SeatBookerStatus.ALREADY_BOOKED:
-                now_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"student_id：{self.username} ALREADY_BOOKED! [{now_time_str}]")
+                self.logger.error(f"UID:{self.username} ALREADY_BOOKED!")
                 return SeatBookerStatus.ALREADY_BOOKED
             # 失败max_failed_time次以上退出程序
             if failed_time > max_failed_time:
+                self.logger.error(f"UID:{self.username} BOOK_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
             # 2秒重试
             time.sleep(2)
             stat = self.book_seat()
+        self.logger.info(f"UID:{self.username} BOOK_SEAT SUCCESS!")
         return SeatBookerStatus.SUCCESS
 
     def loop_get_my_booking_list(self, max_failed_time):
@@ -338,7 +356,7 @@ class SeatBooker:
             failed_time += 1
             # 失败max_failed_time次以上退出get_my_booking_list流程
             if failed_time > max_failed_time:
-                return SeatBookerStatus.LOOP_FAILED
+                return SeatBookerStatus.LOOP_FAILED, None
             # 2秒重试
             time.sleep(2)
             stat, latest_record = self.get_my_booking_list()
