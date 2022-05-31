@@ -66,7 +66,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     return res
 
 
-def auto_booking(conf, receiver=None):
+def auto_booking(conf, receiver=None, max_retry_time=12):
     if not conf:
         return
     student_id = conf["username"]
@@ -78,29 +78,29 @@ def auto_booking(conf, receiver=None):
         raise
     # 总共尝试10次search_seat和book_seat的过程
     already_booked = False
-    retry_time = 10
+    retry_time = max_retry_time
     while retry_time > 0:
         try:
             # 开始search_seat
-            res_search_seat = seat_booker.loop_search_seat(max_failed_time=10)
+            res_search_seat = seat_booker.loop_search_seat(max_failed_time=5)
             # 若search_seat大失败，直接重新尝试一轮
             if res_search_seat != SeatBookerStatus.SUCCESS:
                 continue
             # 开始book_seat
-            res_book_seat = seat_booker.loop_book_seat(max_failed_time=3)
+            res_book_seat = seat_booker.loop_book_seat(max_failed_time=10)
             # 若已有预约则退出
             if res_book_seat == SeatBookerStatus.ALREADY_BOOKED:
                 already_booked = True
                 break
-            # 若成功则可以跳出 retry 的大循环
+            # 若成功则可以跳出
             if res_book_seat == SeatBookerStatus.SUCCESS:
                 break
         except Exception as e:
             app.logger.critical(f"UID:{student_id} catch Exception in booking progress:\n{e}!")
-            continue
-        # 重试机会减少
-        time.sleep(2)
-        retry_time -= 1
+        finally:
+            retry_time -= 1  # 重试机会减少
+            time.sleep(3)
+
     # 最后获取用户预约信息
     if not already_booked:
         res_booking, latest_record = seat_booker.loop_get_my_booking_list(max_failed_time=3)
