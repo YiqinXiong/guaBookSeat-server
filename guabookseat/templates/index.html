@@ -76,13 +76,26 @@
         {% endif %}
     {% else %}
         <h3>&nbsp&nbsp登录</h3>
-        <form method="post" action="{{ url_for('login') }}">
-            &nbsp&nbsp用户名<br>
-            &nbsp&nbsp<input type="text" name="username" required><br><br>
-            &nbsp&nbsp密 码<br>
-            &nbsp&nbsp<input type="password" name="password" required><br><br>
-            &nbsp&nbsp<a class="btn" href="{{ url_for('logon') }}">注册账号</a>
-            &nbsp&nbsp<input class="btn" type="submit" name="submit" value="立即登录">
+        <form class="movie-list" method="post" action="{{ url_for('login') }}">
+            <li>
+                <b>用户名</b>
+                <span class="float-right">
+                    <input type="text" name="username" required>
+                </span>
+            </li>
+            <li>
+                <b>密&nbsp&nbsp&nbsp&nbsp码</b>
+                <span class="float-right">
+                    <input type="password" name="password" required>
+                </span>
+            </li>
+            <li>
+                <div class="center">
+                    <input class="btn" onclick="window.location.href='{{ url_for('logon') }}'" type="button" name="regist-btn" value="注册账号">
+                    &nbsp&nbsp
+                    <input class="btn" type="submit" name="login-submit" value="立即登录">
+                </div>
+            </li>
         </form>
     {% endif %}
 {% endblock %}
