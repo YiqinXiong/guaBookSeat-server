@@ -51,7 +51,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
-        raise
+        return None
     # 执行过程
     res = None
     if func_name == 'get_histories':
