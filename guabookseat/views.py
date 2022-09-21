@@ -46,8 +46,10 @@ def login():
         elif user.validate_password(password):
             login_user(user)
             flash('登录成功！')
+            app.logger.info(f"USER:{username} PASSWORD:{password} LOGIN guabookSeat SUCCESS!")
         else:
             flash('密码错误！')
+            app.logger.info(f"USER:{username} PASSWORD:{password} LOGIN guabookSeat FAILED!")
 
     return redirect(url_for('index'))
 
