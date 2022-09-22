@@ -1,4 +1,5 @@
 import datetime
+import json
 import time
 from enum import Enum
 from random import randint
@@ -29,6 +30,7 @@ class SeatBookerStatus(Enum):
     LOOP_FAILED = 9
     LOGIN_FAILED = 10
     PROXY_ERROR = 11
+    JSON_DECODE_ERROR = 12
 
 
 # SeatBooker类
@@ -103,6 +105,37 @@ class SeatBooker:
                 self.duration_delta = valid_duration_delta
                 return
             retry_time -= 1
+    
+    def get_remote_response(self, url='', method='get', data=None):
+        if method not in ("post", "get"):
+            self.logger.error(f"UID:{self.username} url:{url} method:{method} not in (post, get)")
+        
+        response = None
+        response_data = None
+        # 尝试post/get
+        try:
+            if method == "post":
+                response = self.session.post(url=url, data=data, proxies=self.session.proxies)
+            else:
+                response = self.session.get(url=url, proxies=self.session.proxies)
+        except requests.exceptions.ReadTimeout:
+            return SeatBookerStatus.TIME_OUT, None
+        except requests.exceptions.SSLError:
+            return SeatBookerStatus.PROXY_ERROR, None
+        except Exception:
+            return SeatBookerStatus.UNKNOWN_ERROR, None
+        # 检查status_code
+        if response.status_code != 200:
+            self.logger.warning(f"UID:{self.username} url:{url} status_code != 200!")
+            return SeatBookerStatus.STATUS_CODE_ERROR, None
+        # 尝试解码response为response_data
+        try:
+            response_data = response.json()
+        except requests.exceptions.JSONDecodeError:
+            self.logger.error(f"UID:{self.username} url:{url} requests.exceptions.JSONDecodeError")
+            return SeatBookerStatus.JSON_DECODE_ERROR, None
+
+        return SeatBookerStatus.SUCCESS, response_data
 
     def login(self):
         data = {
@@ -118,21 +151,14 @@ class SeatBooker:
             "_InstallationId": "f28639d1-5c15-1fa0-89bd-9da5a8e015e0"
         }
         # POST login
-        try:
-            response = self.session.post(self.urls['login'], json=data, proxies=self.session.proxies)
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT
-        except requests.exceptions.SSLError:
-            return SeatBookerStatus.PROXY_ERROR
+        status, response_data = self.get_remote_response(url=self.urls['login'], method="post", data=json.dumps(data))
+        if status != SeatBookerStatus.SUCCESS:
+            return status
         # 处理login结果
-        if response.status_code == 200:
-            response_data = response.json()
-            if "mobile" not in response_data.keys():
-                return SeatBookerStatus.LOGIN_FAILED
-            self.uid = response_data["org_score_info"]["uid"]
-            return SeatBookerStatus.SUCCESS
-        else:
+        if "mobile" not in response_data.keys():
             return SeatBookerStatus.LOGIN_FAILED
+        self.uid = response_data["org_score_info"]["uid"]
+        return SeatBookerStatus.SUCCESS
 
     def search_seat(self):
         data = {
@@ -143,63 +169,58 @@ class SeatBooker:
             "space_category[content_id]": self.content_id
         }
         # POST search_seat
-        try:
-            response = self.session.post(self.urls['search_seat'], data=data, proxies=self.session.proxies)
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT
+        status, response_data = self.get_remote_response(url=self.urls['search_seat'], method="post", data=data)
+        if status != SeatBookerStatus.SUCCESS:
+            return status
         # 处理search_seat结果
-        if response.status_code == 200:
-            response_data = response.json()
-            if "data" not in response_data.keys():
-                return SeatBookerStatus.NO_SEAT
-            # 处理系统自动调整的时间
-            if not response_data["content"]["children"][1]["ifAdjust"]:
-                # 系统未自动调整时间
-                pass
-            else:
-                # 系统自动调整时间，如果太离谱就不接受
-                valid_start_time = response_data["content"]["children"][1]["adjustDate"]
-                valid_duration = response_data["content"]["children"][1]["adjustTime"]
-                valid_start_time_delta = valid_start_time - self.start_time
-                valid_duration_delta = valid_duration - self.duration
-                start_timestr = time.strftime("%m-%d %H:%M", time.localtime(self.start_time))
-                valid_start_timestr = time.strftime("%m-%d %H:%M", time.localtime(valid_start_time))
-                end_timestr = time.strftime("%H:%M", time.localtime(self.start_time + self.duration))
-                valid_end_timestr = time.strftime("%H:%M", time.localtime(valid_start_time + valid_duration))
-                self.logger.debug(f"UID:{self.username} "
-                                  f"target:<{start_timestr} to {end_timestr}> "
-                                  f"adjust:<{valid_start_timestr} to {valid_end_timestr}>!")
-                if not self.is_time_affordable(valid_start_time_delta, valid_duration_delta):
-                    return SeatBookerStatus.NOT_AFFORDABLE
-                # 按照系统可用的时间更新预定时间
-                self.start_time_delta = valid_start_time_delta
-                self.duration_delta = valid_duration_delta
-            # 开始选座
-            if self.seat_id == 0:
-                # 选系统推荐的座位
-                self.target_seat = response_data["data"]["bestPairSeats"]["seats"][0]["id"]
-                self.target_seat_title = response_data["data"]["bestPairSeats"]["seats"][0]["title"]
-            else:
-                # 选距离目标座位最近的一个座位，且最好是奇数
-                min_abs = 1e10  # 初始值inf
-                for seat in response_data["data"]["POIs"]:
-                    cur_seat_title = int(seat['title'])
-                    # 筛选出可选的位置中，距离目标座位最近的一个
-                    if seat['state'] == 0 or seat['state'] == 2:
-                        # state=0表示可选，state=2表示推荐
-                        cur_abs = abs(cur_seat_title - self.seat_id)
-                        if cur_abs == 0:
+        if "data" not in response_data.keys():
+            return SeatBookerStatus.NO_SEAT
+        # 处理系统自动调整的时间
+        if not response_data["content"]["children"][1]["ifAdjust"]:
+            # 系统未自动调整时间
+            pass
+        else:
+            # 系统自动调整时间，如果太离谱就不接受
+            valid_start_time = response_data["content"]["children"][1]["adjustDate"]
+            valid_duration = response_data["content"]["children"][1]["adjustTime"]
+            valid_start_time_delta = valid_start_time - self.start_time
+            valid_duration_delta = valid_duration - self.duration
+            start_timestr = time.strftime("%m-%d %H:%M", time.localtime(self.start_time))
+            valid_start_timestr = time.strftime("%m-%d %H:%M", time.localtime(valid_start_time))
+            end_timestr = time.strftime("%H:%M", time.localtime(self.start_time + self.duration))
+            valid_end_timestr = time.strftime("%H:%M", time.localtime(valid_start_time + valid_duration))
+            self.logger.debug(f"UID:{self.username} "
+                                f"target:<{start_timestr} to {end_timestr}> "
+                                f"adjust:<{valid_start_timestr} to {valid_end_timestr}>!")
+            if not self.is_time_affordable(valid_start_time_delta, valid_duration_delta):
+                return SeatBookerStatus.NOT_AFFORDABLE
+            # 按照系统可用的时间更新预定时间
+            self.start_time_delta = valid_start_time_delta
+            self.duration_delta = valid_duration_delta
+        # 开始选座
+        if self.seat_id == 0:
+            # 选系统推荐的座位
+            self.target_seat = response_data["data"]["bestPairSeats"]["seats"][0]["id"]
+            self.target_seat_title = response_data["data"]["bestPairSeats"]["seats"][0]["title"]
+        else:
+            # 选距离目标座位最近的一个座位，且最好是奇数
+            min_abs = 1e10  # 初始值inf
+            for seat in response_data["data"]["POIs"]:
+                cur_seat_title = int(seat['title'])
+                # 筛选出可选的位置中，距离目标座位最近的一个
+                if seat['state'] == 0 or seat['state'] == 2:
+                    # state=0表示可选，state=2表示推荐
+                    cur_abs = abs(cur_seat_title - self.seat_id)
+                    if cur_abs == 0:
+                        self.target_seat = seat['id']
+                        self.target_seat_title = seat['title']
+                        break  # 与预期座位一致，直接结束查找
+                    if cur_abs < min_abs:
+                        if min_abs - cur_abs > 10 or cur_seat_title % 2:
+                            min_abs = cur_abs
                             self.target_seat = seat['id']
                             self.target_seat_title = seat['title']
-                            break  # 与预期座位一致，直接结束查找
-                        if cur_abs < min_abs:
-                            if min_abs - cur_abs > 10 or cur_seat_title % 2:
-                                min_abs = cur_abs
-                                self.target_seat = seat['id']
-                                self.target_seat_title = seat['title']
-            return SeatBookerStatus.SUCCESS
-        else:
-            return SeatBookerStatus.STATUS_CODE_ERROR
+        return SeatBookerStatus.SUCCESS
 
     def book_seat(self):
         data = {
@@ -209,10 +230,9 @@ class SeatBooker:
             "seatBookers[0]": self.uid
         }
         # POST book_seat
-        try:
-            response_data = self.session.post(self.urls['book_seat'], data=data, proxies=self.session.proxies).json()
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT
+        status, response_data = self.get_remote_response(url=self.urls['book_seat'], method="post", data=data)
+        if status != SeatBookerStatus.SUCCESS:
+            return status
         # 处理book_seat结果
         if response_data["CODE"] == "ok":
             return SeatBookerStatus.SUCCESS
@@ -224,14 +244,13 @@ class SeatBooker:
             return SeatBookerStatus.UNKNOWN_ERROR
 
     def get_my_booking_list(self):
-        # GET get_my_booking_list
         latest_record = None
-        try:
-            response_data = self.session.get(self.urls['get_my_booking_list'], proxies=self.session.proxies).json()
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT, latest_record
-        latest_record = response_data["content"]["defaultItems"][0]
+        # GET get_my_booking_list
+        status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
+        if status != SeatBookerStatus.SUCCESS:
+            return status, None
         # 处理get_my_booking_list结果
+        latest_record = response_data["content"]["defaultItems"][0]
         if latest_record["status"] != "0":
             return SeatBookerStatus.UNKNOWN_ERROR, latest_record
         else:
@@ -240,36 +259,33 @@ class SeatBooker:
 
     def get_my_histories(self):
         # GET get_my_booking_list
-        try:
-            response_data = self.session.get(self.urls['get_my_booking_list'], proxies=self.session.proxies).json()
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT, None
+        status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
+        if status != SeatBookerStatus.SUCCESS:
+            return status, None
         return SeatBookerStatus.SUCCESS, response_data["content"]["defaultItems"]
 
     def cancel_booking(self, booking_id):
         # 查询预约情况
-        # GET get_my_booking_list
         latest_record = None
-        try:
-            response_data = self.session.get(self.urls['get_my_booking_list'], proxies=self.session.proxies).json()
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT, latest_record
+        # GET get_my_booking_list
+        status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
+        if status != SeatBookerStatus.SUCCESS:
+            return status, None
         # 找到要删除的预约记录
         for record in response_data["content"]["defaultItems"]:
             if record.get("id") == booking_id:
                 latest_record = record
                 break
         # 处理get_my_booking_list结果
-        if latest_record["status"] != "0":
+        if latest_record is None or latest_record["status"] != "0":
             return SeatBookerStatus.UNKNOWN_ERROR, latest_record
         # 开始取消预约
         cancel_booking_url = f'https://jxnu.huitu.zhishulib.com/Seat/Index/cancelBooking' \
                              f'?bookingId={booking_id}&LAB_JSON=1'
         # POST cancel_booking
-        try:
-            response_data = self.session.post(cancel_booking_url, proxies=self.session.proxies).json()
-        except requests.exceptions.ReadTimeout:
-            return SeatBookerStatus.TIME_OUT, latest_record
+        status, response_data = self.get_remote_response(url=cancel_booking_url, method="post")
+        if status != SeatBookerStatus.SUCCESS:
+            return status, latest_record
         # 处理cancel_booking结果
         if response_data["CODE"] == "ok":
             return SeatBookerStatus.SUCCESS, latest_record
@@ -322,8 +338,6 @@ class SeatBooker:
             elif stat == SeatBookerStatus.NOT_AFFORDABLE:
                 self.logger.debug(f"UID:{self.username} SEARCH_SEAT NOT_AFFORDABLE!")
                 self.adjust_conf_randomly(random_range=failed_time, factor=1.5, max_retry_time=100)
-            elif stat == SeatBookerStatus.STATUS_CODE_ERROR:
-                self.logger.warning(f"UID:{self.username} status_code != 200 !")
             stat = self.search_seat()
         self.logger.info(f"UID:{self.username} valid_seat:#{self.target_seat_title} seat_id:{self.target_seat}!")
         return SeatBookerStatus.SUCCESS
