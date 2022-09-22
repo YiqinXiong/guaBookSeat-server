@@ -24,6 +24,8 @@ def send_mail(title, body, receiver):
 
 
 def history_to_tuple(history):
+    if not history:
+        return None, None, None, None, None
     status_map = {
         "0": "已预约，等待签到",
         "1": "使用中",
@@ -57,17 +59,25 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     if func_name == 'get_histories':
         _, res = seat_booker.get_my_histories()
         res = [history_to_tuple(history) for history in res]
+        return res
     elif func_name == 'cancel_booking':
         stat, res = seat_booker.cancel_booking(booking_id)
-        res = history_to_tuple(res)
+        if stat == SeatBookerStatus.NO_NEED_CANCEL:
+            return
         if stat == SeatBookerStatus.SUCCESS:
             # 发邮件（取消成功）
-            mail_tuple = res
+            mail_tuple = history_to_tuple(res)
             title = "[guaBookSeat] 自动取消预约成功！"
-            body = f"若预约开始25分钟后还没签到，则会自动取消预约以防止违约。\n" \
-                   f"已取消<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位的预约！"
+            body = f"若预约开始25分钟后还没签到，则会自动取消预约以防止违约。" \
+                f"\n已取消<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位的预约！"
             send_mail(title, body, receiver)
-    return res
+        else:
+            # 发邮件（取消失败）
+            title = "[guaBookSeat] 自动取消预约失败！"
+            body = f"还有5分钟签到，请尽快签到，或进入小程序手动取消预约！" \
+                f"\n错误提示：{stat.name}" \
+                f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
+            send_mail(title, body, receiver)
 
 
 def auto_booking(conf, receiver=None, max_retry_time=12):

@@ -31,6 +31,7 @@ class SeatBookerStatus(Enum):
     LOGIN_FAILED = 10
     PROXY_ERROR = 11
     JSON_DECODE_ERROR = 12
+    NO_NEED_CANCEL = 13
 
 
 # SeatBooker类
@@ -278,7 +279,7 @@ class SeatBooker:
                 break
         # 处理get_my_booking_list结果
         if latest_record is None or latest_record["status"] != "0":
-            return SeatBookerStatus.UNKNOWN_ERROR, latest_record
+            return SeatBookerStatus.NO_NEED_CANCEL, latest_record
         # 开始取消预约
         cancel_booking_url = f'https://jxnu.huitu.zhishulib.com/Seat/Index/cancelBooking' \
                              f'?bookingId={booking_id}&LAB_JSON=1'
