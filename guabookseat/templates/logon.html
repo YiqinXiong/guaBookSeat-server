@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h3>&nbsp&nbsp注册账号</h3>
+    <form method="post">
+        &nbsp&nbsp用户名<br>
+        &nbsp&nbsp<input type="text" name="username" required><br><br>
+        &nbsp&nbsp密码（第一次）<br>
+        &nbsp&nbsp<input type="password" name="password_1" required><br><br>
+        &nbsp&nbsp密码（第二次）<br>
+        &nbsp&nbsp<input type="password" name="password_2" required><br><br>
+        &nbsp&nbsp邮箱（用于接收预约结果）<br>
+        &nbsp&nbsp<input type="email" name="mail_address"><br><br>
+        &nbsp&nbsp邀请码<br>
+        &nbsp&nbsp<input type="text" name="code" required><br><br>
+        &nbsp&nbsp<input class="btn" type="submit" name="submit" value="立即注册">
+    </form>
+{% endblock %}

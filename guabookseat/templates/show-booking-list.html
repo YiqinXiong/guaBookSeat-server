@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h3>&nbsp&nbsp预约历史（最近10条）</h3>
+    <ul class="movie-list">
+        {% for history in histories[:10] %}  {# 迭代 histories 变量 #}
+            <li><b>{{ history[3] }}</b>&nbsp&nbsp&nbsp&nbsp<b>{{ history[4] }}号座</b><br>
+                {{ history[1] }} - {{ history[2] }}
+                <span class="float-right">
+                    {{ history[0] }}
+                </span>
+            </li>
+        {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
+    </ul>
+{% endblock %}
