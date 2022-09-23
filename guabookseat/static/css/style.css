@@ -104,6 +104,10 @@ input[name=year] {
     left:45%;
 }
 
+.center {
+    text-align: center;
+}
+
 .inline-form {
     display: inline;
 }

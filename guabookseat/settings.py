@@ -2,9 +2,12 @@ import os
 
 import tzlocal
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from datetime import timedelta
 
 
 class MyFlaskConfig(object):
+    # --------session过期时间--------
+    PERMANENT_SESSION_LIFETIME = timedelta(seconds=600)
     # --------环境变量--------
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev')
     # --------访问DB--------
@@ -43,4 +46,3 @@ class MyFlaskConfig(object):
     MAIL_USERNAME = "foobar@qq.com"
     MAIL_PASSWORD = "foobarfoobar"
     MAIL_DEFAULT_SENDER = "foobar@qq.com"
-

@@ -13,12 +13,19 @@ def get_start_end_timestr(start_time, duration):
 
 
 def send_mail(title, body, receiver):
+    if not receiver or type(receiver) != str or receiver == "":
+        return
     msg = Message(subject=title, recipients=[receiver], body=body, sender=app.config['MAIL_DEFAULT_SENDER'])
-    with app.app_context():
-        mail.send(msg)
+    try:
+        with app.app_context():
+            mail.send(msg)
+    except Exception as e:
+        app.logger.error(f"send_email raise an Exception:\n{e}")
 
 
 def history_to_tuple(history):
+    if not history:
+        return None, None, None, None, None
     status_map = {
         "0": "已预约，等待签到",
         "1": "使用中",
@@ -46,37 +53,54 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
-        raise
+        return None
     # 执行过程
     res = None
     if func_name == 'get_histories':
         _, res = seat_booker.get_my_histories()
         res = [history_to_tuple(history) for history in res]
+        return res
     elif func_name == 'cancel_booking':
         stat, res = seat_booker.cancel_booking(booking_id)
-        res = history_to_tuple(res)
+        if stat == SeatBookerStatus.NO_NEED_CANCEL:
+            return
         if stat == SeatBookerStatus.SUCCESS:
             # 发邮件（取消成功）
-            if receiver and receiver != "":
-                mail_tuple = res
-                title = "[guaBookSeat] 自动取消预约成功！"
-                body = f"若预约开始25分钟后还没签到，则会自动取消预约以防止违约。\n" \
-                       f"已取消<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位的预约！"
-                send_mail(title, body, receiver)
-    return res
+            mail_tuple = history_to_tuple(res)
+            title = "[guaBookSeat] 自动取消预约成功！"
+            body = f"若预约开始25分钟后还没签到，则会自动取消预约以防止违约。" \
+                f"\n已取消<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位的预约！"
+            send_mail(title, body, receiver)
+        else:
+            # 发邮件（取消失败）
+            title = "[guaBookSeat] 自动取消预约失败！"
+            body = f"还有5分钟签到，请尽快签到，或进入小程序手动取消预约！" \
+                f"\n错误提示：{stat.name}" \
+                f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
+            send_mail(title, body, receiver)
 
 
 def auto_booking(conf, receiver=None, max_retry_time=12):
     if not conf:
         return
     student_id = conf["username"]
+    exception_msg = None
     # 实例化
     seat_booker = SeatBooker(conf, app.logger)
+
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
-        raise
-    # 总共尝试10次search_seat和book_seat的过程
+        exception_msg = "登录图书馆系统失败，请检查订座信息中学号和洄图平台密码"
+        # 发邮件（登陆失败）
+        title = "[guaBookSeat] 预约失败了，快看看啥情况..."
+        body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
+               f"\n错误提示：{exception_msg}" \
+               f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
+        send_mail(title, body, receiver)
+        return
+
+    # 总共尝试max_retry_time次search_seat和book_seat的过程
     already_booked = False
     retry_time = max_retry_time
     while retry_time > 0:
@@ -96,12 +120,13 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
             if res_book_seat == SeatBookerStatus.SUCCESS:
                 break
         except Exception as e:
-            app.logger.critical(f"UID:{student_id} catch Exception in booking progress:\n{e}!")
+            app.logger.critical(f"UID:{student_id} raise an Exception in booking progress:\n{e}!")
+            exception_msg = str(e)
         finally:
             retry_time -= 1  # 重试机会减少
             time.sleep(3)
 
-    # 最后获取用户预约信息
+    # 最后获取用户预约信息并发邮件
     if not already_booked:
         res_booking, latest_record = seat_booker.loop_get_my_booking_list(max_failed_time=3)
         if res_booking == SeatBookerStatus.SUCCESS:
@@ -113,24 +138,22 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
                               args=[conf, 'cancel_booking', receiver, latest_record["id"]])
             app.logger.info(f"UID:{student_id} CREATE AUTO_CANCEL_JOB SUCCESS!")
             # 发邮件（成功）
-            if receiver and receiver != "":
-                mail_tuple = history_to_tuple(latest_record)
-                title = "[guaBookSeat] 抢到座位啦！"
-                body = f"已预约！<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位自习，记得签到！" \
-                       f"\n若预约开始25分钟后还没签到，则会自动取消预约以防止违约。"
-                send_mail(title, body, receiver)
+            mail_tuple = history_to_tuple(latest_record)
+            title = "[guaBookSeat] 抢到座位啦！"
+            body = f"已预约！<{mail_tuple[1]}到{mail_tuple[2]}>在<{mail_tuple[3]}>的<{mail_tuple[4]}号>座位自习，记得签到！" \
+                   f"\n若预约开始25分钟后还没签到，则会自动取消预约以防止违约。"
+            send_mail(title, body, receiver)
         else:
             app.logger.error(f"UID:{student_id} BOOK FAILED!")
             # 发邮件（失败）
-            if receiver and receiver != "":
-                title = "[guaBookSeat] 预约失败了，快看看啥情况..."
-                body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
-                       f"\n如有bug请与我（发件邮箱）联系。"
-                send_mail(title, body, receiver)
+            title = "[guaBookSeat] 预约失败了，快看看啥情况..."
+            body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
+                   f"\n错误提示：{exception_msg}" \
+                   f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
+            send_mail(title, body, receiver)
     else:
         # 发邮件（已有预约）
-        if receiver and receiver != "":
-            title = "[guaBookSeat] 已有预约，本次预约无效..."
-            body = f"如果实际没有预约，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
-                   f"\n如有bug请与我（发件邮箱）联系。"
-            send_mail(title, body, receiver)
+        title = "[guaBookSeat] 已有预约，本次预约无效..."
+        body = f"如果实际没有预约，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
+               f"\n如有bug请与我（发件邮箱）联系。"
+        send_mail(title, body, receiver)
