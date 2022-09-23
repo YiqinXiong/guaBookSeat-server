@@ -285,8 +285,8 @@ class SeatBooker:
             # 失败max_failed_time次以上退出login流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试
-            time.sleep(2)
+            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
+            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
             # 如果是PROXY_ERROR，则修改代理
             if stat == SeatBookerStatus.PROXY_ERROR:
                 proxy = {
@@ -312,8 +312,8 @@ class SeatBooker:
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} SEARCH_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试
-            time.sleep(2)
+            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
+            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
             # 无位置时大幅调整预定时间和时长
             if stat == SeatBookerStatus.NO_SEAT:
                 self.logger.debug(f"UID:{self.username} SEARCH_SEAT NO_SEAT!")
@@ -329,7 +329,7 @@ class SeatBooker:
         return SeatBookerStatus.SUCCESS
 
     def loop_book_seat(self, max_failed_time):
-        # 若book_seat失败可以循环重试，每2s一次，最多允许失败3次
+        # 若book_seat失败可以循环重试，每2s一次，最多允许失败max_failed_time次
         failed_time = 0
         stat = self.book_seat()
         while stat != SeatBookerStatus.SUCCESS:
@@ -342,8 +342,8 @@ class SeatBooker:
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} BOOK_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试
-            time.sleep(2)
+            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
+            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
             stat = self.book_seat()
         self.logger.info(f"UID:{self.username} BOOK_SEAT SUCCESS!")
         return SeatBookerStatus.SUCCESS
@@ -357,7 +357,7 @@ class SeatBooker:
             # 失败max_failed_time次以上退出get_my_booking_list流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED, None
-            # 2秒重试
-            time.sleep(2)
+            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
+            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
             stat, latest_record = self.get_my_booking_list()
         return SeatBookerStatus.SUCCESS, latest_record
