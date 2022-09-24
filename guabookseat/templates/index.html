@@ -43,17 +43,29 @@
             <ul class="movie-list">
                 {% if auto_booking_info.enable %}
                     <li>
-                        <b>运行中</b>&nbsp
-                        {% if user.mail_address %}
-                            <span class="float-right">
-                                <b>邮箱: </b>{{ user.mail_address }}&nbsp&nbsp
-                            </span>
-                            <br><br>
+                        {% if auto_booking_info.paused %}
+                            <b>暂停中</b>&nbsp
+                        {% else %}
+                            <b>运行中</b>&nbsp
                         {% endif %}
-                        <a class="imdb-red" href="{{ url_for('disable_auto_booking') }}">关闭自动预约</a>
+
+                        <span class="float-right">
+                            {% if user.mail_address %}
+                                <b>邮箱: </b>{{ user.mail_address }}&nbsp&nbsp
+                            {% else %}
+                                <b>邮箱: </b>未填写&nbsp&nbsp
+                            {% endif %}
+                        </span>
+                        <br><br>
+
+                        {% if auto_booking_info.paused %}
+                            <a class="imdb-blue" href="{{ url_for('resume_auto_booking') }}">继续自动预约</a>
+                        {% else %}
+                            <a class="imdb-red" href="{{ url_for('pause_auto_booking') }}">暂停自动预约</a>
+                        {% endif %}
                         &nbsp
                         <span class="float-right">
-                            <b>下次运行: </b>{{ auto_booking_info.next_order_time[:-3] }}&nbsp&nbsp
+                            <b>下次运行: </b>{{ auto_booking_info.next_order_time }}&nbsp&nbsp
                             <a class="imdb" href="{{ url_for('set_auto_booking') }}">修改</a>
                         </span>
                     </li>
@@ -91,7 +103,8 @@
             </li>
             <li>
                 <div class="center">
-                    <input class="btn" onclick="window.location.href='{{ url_for('logon') }}'" type="button" name="regist-btn" value="注册账号">
+                    <input class="btn" onclick="window.location.href='{{ url_for('logon') }}'" type="button"
+                           name="regist-btn" value="注册账号">
                     &nbsp&nbsp
                     <input class="btn" type="submit" name="login-submit" value="立即登录">
                 </div>
