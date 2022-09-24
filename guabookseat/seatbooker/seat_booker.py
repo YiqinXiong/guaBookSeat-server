@@ -31,7 +31,7 @@ class SeatBookerStatus(Enum):
     LOGIN_FAILED = 10
     PROXY_ERROR = 11
     JSON_DECODE_ERROR = 12
-    NO_NEED_CANCEL = 13
+    NO_NEED = 13
 
 
 # SeatBooker类
@@ -66,7 +66,9 @@ class SeatBooker:
             'login': url_home + '/api/1/login',
             'search_seat': url_home + '/Seat/Index/searchSeats?LAB_JSON=1',
             'book_seat': url_home + '/Seat/Index/bookSeats?LAB_JSON=1',
-            'get_my_booking_list': url_home + '/Seat/Index/myBookingList?LAB_JSON=1'
+            'get_my_booking_list': url_home + '/Seat/Index/myBookingList?LAB_JSON=1',
+            'cancel_booking': url_home + '/Seat/Index/cancelBooking?LAB_JSON=1',
+            'checkin_booking': url_home + '/Seat/Index/checkIn?LAB_JSON=1',
         }
         self.session = requests.session()
         self.session.headers.update(fake_header)
@@ -106,7 +108,7 @@ class SeatBooker:
                 self.duration_delta = valid_duration_delta
                 return
             retry_time -= 1
-    
+
     def get_remote_response(self, url='', method='get', data=None):
         if method not in ("post", "get"):
             self.logger.error(f"UID:{self.username} url:{url} method:{method} not in (post, get)")
@@ -116,7 +118,7 @@ class SeatBooker:
             if method == "post":
                 response = self.session.post(url=url, data=data, proxies=self.session.proxies)
             else:
-                response = self.session.get(url=url, proxies=self.session.proxies)
+                response = self.session.get(url=url, proxies=self.session.proxies, timeout=5)
         except requests.exceptions.ReadTimeout:
             return SeatBookerStatus.TIME_OUT, None
         except requests.exceptions.SSLError:
@@ -193,8 +195,8 @@ class SeatBooker:
             end_timestr = time.strftime("%H:%M", time.localtime(self.start_time + self.duration))
             valid_end_timestr = time.strftime("%H:%M", time.localtime(valid_start_time + valid_duration))
             self.logger.debug(f"UID:{self.username} "
-                                f"target:<{start_timestr} to {end_timestr}> "
-                                f"adjust:<{valid_start_timestr} to {valid_end_timestr}>!")
+                              f"target:<{start_timestr} to {end_timestr}> "
+                              f"adjust:<{valid_start_timestr} to {valid_end_timestr}>!")
             if not self.is_time_affordable(valid_start_time_delta, valid_duration_delta):
                 return SeatBookerStatus.NOT_AFFORDABLE
             # 按照系统可用的时间更新预定时间
@@ -246,54 +248,73 @@ class SeatBooker:
         else:
             return SeatBookerStatus.UNKNOWN_ERROR
 
-    def get_my_booking_list(self):
-        latest_record = None
+    def get_latest_record(self):
         # GET get_my_booking_list
         status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
         if status != SeatBookerStatus.SUCCESS:
             return status, None
-        # 处理get_my_booking_list结果
-        latest_record = response_data["content"]["defaultItems"][0]
-        if latest_record["status"] != "0":
-            return SeatBookerStatus.UNKNOWN_ERROR, latest_record
-        else:
-            # 成功约上
-            return SeatBookerStatus.SUCCESS, latest_record
+        return SeatBookerStatus.SUCCESS, response_data["content"]["defaultItems"][0]
 
-    def get_my_histories(self):
+    def get_my_booking_list(self):
         # GET get_my_booking_list
         status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
         if status != SeatBookerStatus.SUCCESS:
             return status, None
         return SeatBookerStatus.SUCCESS, response_data["content"]["defaultItems"]
 
-    def cancel_booking(self, booking_id):
+    def get_target_record(self, booking_id):
         # 查询预约情况
-        latest_record = None
-        # GET get_my_booking_list
-        status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
+        status, last_10_records = self.get_my_booking_list()
         if status != SeatBookerStatus.SUCCESS:
-            return status, None
-        # 找到要删除的预约记录
-        for record in response_data["content"]["defaultItems"]:
-            if record.get("id") == booking_id:
-                latest_record = record
+            return None
+        # 找到目标记录
+        target_record = None
+        for record in last_10_records:
+            if str(record.get("id")) == booking_id:
+                target_record = record
                 break
-        # 处理get_my_booking_list结果
-        if latest_record is None or latest_record["status"] != "0":
-            return SeatBookerStatus.NO_NEED_CANCEL, latest_record
+        return target_record
+
+    def cancel_booking(self, booking_id):
+        target_record = self.get_target_record(booking_id)
+        # 处理target_record结果
+        if target_record is None or target_record["status"] != "0":
+            return SeatBookerStatus.NO_NEED, target_record
         # 开始取消预约
-        cancel_booking_url = f'https://jxnu.huitu.zhishulib.com/Seat/Index/cancelBooking' \
-                             f'?bookingId={booking_id}&LAB_JSON=1'
+        data = {
+            'bookingId': booking_id,
+        }
         # POST cancel_booking
-        status, response_data = self.get_remote_response(url=cancel_booking_url, method="post")
+        status, response_data = self.get_remote_response(url=self.urls['cancel_booking'], method="post", data=data)
         if status != SeatBookerStatus.SUCCESS:
-            return status, latest_record
+            return status, target_record
         # 处理cancel_booking结果
         if response_data["CODE"] == "ok":
-            return SeatBookerStatus.SUCCESS, latest_record
+            return SeatBookerStatus.SUCCESS, target_record
         else:
-            return SeatBookerStatus.UNKNOWN_ERROR, latest_record
+            return SeatBookerStatus.UNKNOWN_ERROR, target_record
+
+    def checkin_booking(self, booking_id):
+        target_record = self.get_target_record(booking_id)
+        # 处理target_record结果
+        if target_record is None or target_record["status"] != "0":
+            self.logger.warning(
+                f"UID:{self.username} booking_id:{booking_id} target_record is None or target_record[status] != 0")
+            return SeatBookerStatus.NO_NEED, target_record
+        # 开始签到
+        data = {
+            'bookingId': booking_id,
+        }
+        # POST checkin_booking
+        status, response_data = self.get_remote_response(url=self.urls['checkin_booking'], method="post", data=data)
+        if status != SeatBookerStatus.SUCCESS:
+            return status, target_record
+        # 处理checkin_booking结果
+        if response_data["DATA"]["result"] == "success":
+            return SeatBookerStatus.SUCCESS, target_record
+        else:
+            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['DATA']['msg']}!")
+            return SeatBookerStatus.UNKNOWN_ERROR, target_record
 
     def loop_login(self, max_failed_time):
         # 若login失败可以循环重试，每2s一次，最多允许失败max_failed_time次
@@ -365,16 +386,16 @@ class SeatBooker:
         self.logger.info(f"UID:{self.username} BOOK_SEAT SUCCESS!")
         return SeatBookerStatus.SUCCESS
 
-    def loop_get_my_booking_list(self, max_failed_time):
-        # 若get_my_booking_list失败可以循环重试，每2s一次，最多允许失败max_failed_time次
+    def loop_get_latest_record(self, max_failed_time):
+        # 若get_latest_record失败可以循环重试，每2s一次，最多允许失败max_failed_time次
         failed_time = 0
-        stat, latest_record = self.get_my_booking_list()
+        stat, latest_record = self.get_latest_record()
         while stat != SeatBookerStatus.SUCCESS:
             failed_time += 1
-            # 失败max_failed_time次以上退出get_my_booking_list流程
+            # 失败max_failed_time次以上退出get_latest_record流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED, None
             # 2秒重试，加上最多5s的罚时（与失败次数正相关）
             time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
-            stat, latest_record = self.get_my_booking_list()
+            stat, latest_record = self.get_latest_record()
         return SeatBookerStatus.SUCCESS, latest_record
