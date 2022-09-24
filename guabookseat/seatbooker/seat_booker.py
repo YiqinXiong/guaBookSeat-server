@@ -110,9 +110,7 @@ class SeatBooker:
     def get_remote_response(self, url='', method='get', data=None):
         if method not in ("post", "get"):
             self.logger.error(f"UID:{self.username} url:{url} method:{method} not in (post, get)")
-        
-        response = None
-        response_data = None
+
         # 尝试post/get
         try:
             if method == "post":
@@ -123,7 +121,8 @@ class SeatBooker:
             return SeatBookerStatus.TIME_OUT, None
         except requests.exceptions.SSLError:
             return SeatBookerStatus.PROXY_ERROR, None
-        except Exception:
+        except Exception as e:
+            self.logger.error(f"UID:{self.username} url:{url} {method} error:{str(e)}")
             return SeatBookerStatus.UNKNOWN_ERROR, None
         # 检查status_code
         if response.status_code != 200:
@@ -135,6 +134,9 @@ class SeatBooker:
         except requests.exceptions.JSONDecodeError:
             self.logger.error(f"UID:{self.username} url:{url} requests.exceptions.JSONDecodeError")
             return SeatBookerStatus.JSON_DECODE_ERROR, None
+        except Exception as e:
+            self.logger.error(f"UID:{self.username} url:{url} decode error:{str(e)}")
+            return SeatBookerStatus.UNKNOWN_ERROR, None
 
         return SeatBookerStatus.SUCCESS, response_data
 

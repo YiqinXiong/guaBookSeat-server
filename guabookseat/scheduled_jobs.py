@@ -34,6 +34,7 @@ def history_to_tuple(history):
         "5": "已结束，未签到结束",
         "6": "已结束，暂离未归结束",
         "7": "已结束，系统签退结束",
+        "8": "预约邀请待确认",
     }
     status = status_map.get(history.get("status"))
     status = status if status else "未知状态"
@@ -55,7 +56,6 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     if res_login == SeatBookerStatus.LOOP_FAILED:
         return None
     # 执行过程
-    res = None
     if func_name == 'get_histories':
         _, res = seat_booker.get_my_histories()
         res = [history_to_tuple(history) for history in res]
