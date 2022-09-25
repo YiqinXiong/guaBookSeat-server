@@ -403,3 +403,20 @@ class SeatBooker:
             time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
             stat, latest_record = self.get_latest_record()
         return SeatBookerStatus.SUCCESS, latest_record
+
+    def loop_checkin_booking(self, booking_id, max_failed_time):
+        # 若checkin_booking失败可以循环重试，每2s一次，最多允许失败max_failed_time次
+        failed_time = 0
+        stat, target_record = self.checkin_booking(booking_id=booking_id)
+        while stat != SeatBookerStatus.SUCCESS:
+            failed_time += 1
+            # 无需签到
+            if stat == SeatBookerStatus.NO_NEED:
+                return stat, target_record
+            # 失败max_failed_time次以上退出checkin_booking流程
+            if failed_time > max_failed_time:
+                return SeatBookerStatus.LOOP_FAILED, target_record
+            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
+            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            stat, target_record = self.checkin_booking(booking_id=booking_id)
+        return SeatBookerStatus.SUCCESS, target_record

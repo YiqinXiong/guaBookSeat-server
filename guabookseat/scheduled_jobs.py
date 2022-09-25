@@ -62,7 +62,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
         res = [history_to_tuple(history) for history in res] if res else None
         return res
     elif func_name == 'checkin_booking':
-        stat, res = seat_booker.checkin_booking(booking_id)
+        stat, res = seat_booker.loop_checkin_booking(booking_id=booking_id, max_failed_time=3)
         if stat == SeatBookerStatus.NO_NEED:
             return
         if stat == SeatBookerStatus.SUCCESS:
