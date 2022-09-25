@@ -51,10 +51,10 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
         app.logger.error(f"call_seat_booker_func not conf:{not conf} or not func_name: {not func_name}")
         return None
     # 实例化
-    seat_booker = SeatBooker(conf, app.logger)
-    # login过程
-    res_login = seat_booker.loop_login(max_failed_time=3)
-    if res_login == SeatBookerStatus.LOOP_FAILED:
+    try:
+        seat_booker = SeatBooker(conf, app.logger)
+    except RuntimeError as e:
+        app.logger.critical(f"SeatBooker: {str(e)}")
         return None
     # 执行过程
     if func_name == 'get_histories':
@@ -142,11 +142,10 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
     student_id = conf["username"]
     exception_msg = None
     # 实例化
-    seat_booker = SeatBooker(conf, app.logger)
-
-    # login过程
-    res_login = seat_booker.loop_login(max_failed_time=3)
-    if res_login == SeatBookerStatus.LOOP_FAILED:
+    try:
+        seat_booker = SeatBooker(conf, app.logger)
+    except RuntimeError as e:
+        app.logger.critical(f"SeatBooker: {str(e)}")
         exception_msg = "登录自习室失败，请检查订座信息中学号和自习室平台密码"
         # 发邮件（登陆失败）
         title = "[guaBookSeat] 预约失败了，快看看啥情况..."

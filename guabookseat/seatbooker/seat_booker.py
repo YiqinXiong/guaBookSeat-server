@@ -3,6 +3,8 @@ import json
 import time
 from enum import Enum
 from random import randint
+from guabookseat.models import UserCookie
+from guabookseat import db
 
 import requests
 
@@ -73,6 +75,31 @@ class SeatBooker:
         }
         self.session = requests.session()
         self.session.headers.update(fake_header)
+        # 设置cookie
+        user_cookie = UserCookie.query.filter_by(username=self.username).first()
+        if user_cookie:
+            if user_cookie.is_expired():
+                # 登录
+                stat = self.loop_login(max_failed_time=5)
+                if stat != SeatBookerStatus.SUCCESS:
+                    raise RuntimeError("cookie过期且登陆失败")
+                # 更新cookie
+                user_cookie.set_cookie(self.session.cookies.get_dict(), self.username, self.uid)
+                db.session.commit()
+            else:
+                # 使用保存的cookie
+                self.session.cookies.update(user_cookie.get_cookie())
+                self.uid = user_cookie.get_uid()
+        else:
+            # 登录
+            stat = self.loop_login(max_failed_time=5)
+            if stat != SeatBookerStatus.SUCCESS:
+                raise RuntimeError("无cookie且登陆失败")
+            # 保存cookie
+            user_cookie = UserCookie()
+            user_cookie.set_cookie(self.session.cookies.get_dict(), self.username, self.uid)
+            db.session.add(user_cookie)
+            db.session.commit()
 
     def is_time_affordable(self, start_time_delta, duration_delta):
         # 检查start_time误差，前后波动最多conf['start_time_delta_limit']小时
@@ -242,12 +269,14 @@ class SeatBooker:
         # 处理book_seat结果
         if response_data["CODE"] == "ok":
             return SeatBookerStatus.SUCCESS
-        elif response_data["CODE"] == "ParamError":
-            if "已有预约" in response_data["MESSAGE"]:
-                return SeatBookerStatus.ALREADY_BOOKED
-            return SeatBookerStatus.PARAM_ERROR
         else:
-            return SeatBookerStatus.UNKNOWN_ERROR
+            self.logger.warning(f"UID:{self.username} BOOKING_FAILED:{response_data['DATA']['msg']}")
+            if response_data["CODE"] == "ParamError":
+                if "已有预约" in response_data["MESSAGE"]:
+                    return SeatBookerStatus.ALREADY_BOOKED
+                return SeatBookerStatus.PARAM_ERROR
+            else:
+                return SeatBookerStatus.UNKNOWN_ERROR
 
     def get_latest_record(self):
         # GET get_my_booking_list
@@ -282,7 +311,7 @@ class SeatBooker:
         if target_record is None or target_record["status"] != "0":
             self.logger.warning(
                 f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
-                f"target_record[status]!=0: {target_record['status'] if target_record else None}") 
+                f"target_record[status]!=0: {target_record['status'] if target_record else None}")
             return SeatBookerStatus.NO_NEED, target_record
         # 开始取消预约
         data = {
@@ -304,7 +333,7 @@ class SeatBooker:
         if target_record is None or target_record["status"] != "0":
             self.logger.warning(
                 f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
-                f"target_record[status]!=0: {target_record['status'] if target_record else None}") 
+                f"target_record[status]!=0: {target_record['status'] if target_record else None}")
             return SeatBookerStatus.NO_NEED, target_record
         # 开始签到
         data = {

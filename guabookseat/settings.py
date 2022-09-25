@@ -6,6 +6,7 @@ import tzlocal
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from datetime import timedelta
 
+
 def get_config_from_file():
     my_config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
     try:
@@ -38,7 +39,7 @@ class MyFlaskConfig(object):
     # 模型修改的监控开关
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # --------任务调度APScheduler--------
-    json_scheduler = config['scheduler']  if 'scheduler' in config else {}
+    json_scheduler = config['scheduler'] if 'scheduler' in config else {}
     # 调度器开关
     SCHEDULER_API_ENABLED = True
     # job持久化
@@ -61,7 +62,7 @@ class MyFlaskConfig(object):
     # 时区
     SCHEDULER_TIMEZONE = str(tzlocal.get_localzone())
     # --------邮箱Flask-Mail--------
-    json_mail = config['mail']  if 'mail' in config else {}
+    json_mail = config['mail'] if 'mail' in config else {}
     MAIL_SERVER = json_mail['server'] if 'server' in json_mail else "smtp.qq.com"
     MAIL_PORT = json_mail['port'] if 'port' in json_mail else 465
     MAIL_USE_SSL = json_mail['use_ssl'] if 'use_ssl' in json_mail else True

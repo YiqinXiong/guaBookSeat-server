@@ -139,3 +139,6 @@ log/
 
 # config file
 config.json
+
+# flask-migrate
+migrations/

@@ -1,3 +1,6 @@
+import json
+import time
+
 from flask_login import UserMixin
 from sqlalchemy import ForeignKey
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -56,3 +59,26 @@ class UserConfig(db.Model):
             'duration_delta': self.duration_delta_limit,
         }
         return config_map
+
+
+class UserCookie(db.Model):
+    cid = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True)  # 自习室账号
+    uid = db.Column(db.Integer, unique=True)  # 网页uid
+    cookie = db.Column(db.String(512))  # cookie json 字符串
+    expire_time = db.Column(db.Integer)  # 过期时间戳
+
+    def set_cookie(self, cookie, username, uid):
+        self.username = username
+        self.uid = uid
+        self.cookie = json.dumps(cookie)
+        self.expire_time = int(time.time()) + 3 * 24 * 3600  # cookie 3天后过期
+
+    def is_expired(self):
+        return time.time() > self.expire_time
+
+    def get_cookie(self):
+        return json.loads(self.cookie)
+
+    def get_uid(self):
+        return self.uid
