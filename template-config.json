@@ -1,0 +1,17 @@
+{
+    "session_life_time": 600,
+    "scheduler":{
+        "max_workers": 32,
+        "max_instances": 32,
+        "misfire_grace_time": 600
+    },
+    "mail":{
+        "server":"smtp.qq.com",
+        "port":465,
+        "use_ssl":true,
+        "use_tls":false,
+        "username":"foobar@qq.com",
+        "password": "foobarfoobar",
+        "default_sender":"foobar@qq.com"
+    }
+}

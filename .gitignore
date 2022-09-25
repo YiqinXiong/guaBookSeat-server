@@ -136,3 +136,9 @@ dmypy.json
 
 # logging
 log/
+
+# config file
+config.json
+
+# flask-migrate
+migrations/

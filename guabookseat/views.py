@@ -19,8 +19,10 @@ def index():  # put application's code here
         # 当前自动预约信息
         auto_booking_info = {
             'enable': booking_job is not None,
+            'paused': booking_job.next_run_time is None if booking_job else True,
             'task_id': job_id,
-            'next_order_time': booking_job.next_run_time.strftime('%Y年%m月%d日 %H:%M:%S') if booking_job else None
+            'next_order_time': booking_job.next_run_time.strftime(
+                '%Y年%m月%d日 %H:%M') if booking_job and booking_job.next_run_time else "无计划"
         }
     if request.method == 'POST':
         if not current_user.is_authenticated:
@@ -99,25 +101,48 @@ def logout():
 @login_required
 def set_auto_booking():
     if request.method == 'POST':
-        flash_str = ""
         # 更新邮箱
         mail_address = request.form['mail_address'] if request.form['mail_address'] != "" else None
-        if mail_address != current_user.mail_address:
+        mail_changed = mail_address != current_user.mail_address
+        if mail_changed:
             user = User.query.get(current_user.id)
             user.mail_address = mail_address
             db.session.commit()
-            flash_str += "邮箱已更新！"
         # 更新自动预约任务时间
-        cur_config_id = int(request.form['config_id'])
         order_time = request.form['order_time'].split(':')
-        userconfig = UserConfig.query.get(cur_config_id)
         job_id = 'daily_auto_booking_' + str(current_user.id)
-        if scheduler.get_job(id=job_id):
-            scheduler.remove_job(id=job_id)
-        scheduler.add_job(id=job_id, func=auto_booking, trigger='cron', hour=order_time[0], minute=order_time[1],
-                          args=[userconfig.get_config(), mail_address])
-        flash_str += "自动预约任务时间已更新！"
-        flash(flash_str)
+        cur_job = scheduler.get_job(id=job_id)
+        cur_config_id = int(request.form['config_id'])
+        userconfig = UserConfig.query.get(cur_config_id)
+        # 存在任务则修改
+        if cur_job:
+            cur_time = cur_job.next_run_time
+            time_changed = int(order_time[0]) != cur_time.hour or int(
+                order_time[1]) != cur_time.minute if cur_time else True
+            job_paused = cur_time is None
+            # 分情况修改任务
+            if mail_changed and time_changed:
+                scheduler.modify_job(id=job_id, trigger='cron', hour=order_time[0], minute=order_time[1],
+                                     args=[userconfig.get_config(), mail_address])
+            elif mail_changed:
+                scheduler.modify_job(id=job_id, args=[userconfig.get_config(), mail_address])
+            elif time_changed:
+                scheduler.modify_job(id=job_id, trigger='cron', hour=order_time[0], minute=order_time[1])
+            else:
+                pass
+            # 若之前任务为暂停状态，继续暂停任务
+            if job_paused:
+                scheduler.pause_job(id=job_id)
+        # 不存在任务则添加
+        else:
+            scheduler.add_job(id=job_id, func=auto_booking, trigger='cron', hour=order_time[0], minute=order_time[1],
+                              args=[userconfig.get_config(), mail_address])
+            time_changed = True
+        # 提示信息
+        if mail_changed or time_changed:
+            flash_str = "邮箱已更新！" if mail_changed else ""
+            flash_str += "自动预约任务时间已更新！" if time_changed else ""
+            flash(flash_str)
         return redirect(url_for('index'))
 
     return render_template('set-auto-booking.html')
@@ -153,12 +178,21 @@ def set_config():
                            valid_duration_delta_limits=Constants.valid_duration_delta_limits)
 
 
-@app.route('/disable-auto-booking')
+@app.route('/pause-auto-booking')
 @login_required
-def disable_auto_booking():
+def pause_auto_booking():
     job_id = 'daily_auto_booking_' + str(current_user.id)
     if scheduler.get_job(id=job_id):
-        scheduler.remove_job(id=job_id)
+        scheduler.pause_job(id=job_id)
+    return redirect(url_for('index'))
+
+
+@app.route('/resume-auto-booking')
+@login_required
+def resume_auto_booking():
+    job_id = 'daily_auto_booking_' + str(current_user.id)
+    if scheduler.get_job(id=job_id):
+        scheduler.resume_job(id=job_id)
     return redirect(url_for('index'))
 
 
