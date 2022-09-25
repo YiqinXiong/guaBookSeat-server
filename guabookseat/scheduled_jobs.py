@@ -67,15 +67,17 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
             return
         target_begin_time = int(res["time"]) if res else time.time() + 60 * 10
         if stat == SeatBookerStatus.SUCCESS:
-            target_end_time = target_begin_time + int(res["duration"])
+            ''' 不需要自动签退，到时间后系统会自动签退
             # 创建定时签退任务
             job_id = 'checkout_booking_' + str(booking_id)
+            target_end_time = target_begin_time + int(res["duration"])
             checkout_time = time.localtime(target_end_time)  # 自习结束时自动签退
             if not scheduler.get_job(id=job_id):
                 scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
                                   run_date=time.strftime("%Y-%m-%d %H:%M:%S", checkout_time),
                                   args=[conf, 'checkout_booking', receiver, booking_id])
                 app.logger.info(f"UID:{conf['username']} CREATE AUTO_CHECKOUT_JOB SUCCESS!")
+            '''
             # 发邮件（签到成功）
             mail_tuple = history_to_tuple(res)
             title = "[guaBookSeat] 自动签到成功！"
