@@ -1,7 +1,9 @@
 import click
+import markdown
 
-from guabookseat import app, db
+from guabookseat import app, db, mail
 from guabookseat.models import User, UserConfig
+from flask_mail import Message
 
 
 @app.cli.command()
@@ -78,3 +80,34 @@ def create_admin(password):
         db.session.add(user)
     db.session.commit()
     click.echo('Done.')
+
+
+@app.cli.command()
+@click.option('--title', prompt=True, help='mail title')
+@click.option('--file', prompt=True, help='mail text file path')
+@click.option('--test', is_flag=True, help='If test or not')
+def notify_update(title, file, test):
+    try:
+        with open(file) as f:
+            body = f.read()
+            html_body = markdown.markdown(body)
+    except FileNotFoundError:
+        app.logger.critical(f"mail text file {file} not found")
+
+    receivers = set()
+    if test:
+        admin_user = User.query.filter_by(username='admin').first()
+        if admin_user.mail_address:
+            receivers.add(admin_user.mail_address)
+    else:
+        users = User.query.all()
+        for user in users:
+            if user.mail_address:
+                receivers.add(user.mail_address)
+
+    msg = Message(subject=title, recipients=list(receivers), html=html_body, sender=app.config['MAIL_DEFAULT_SENDER'])
+    try:
+        with app.app_context():
+            mail.send(msg)
+    except Exception as e:
+        app.logger.error(f"send_email raise an Exception:\n{e}")
