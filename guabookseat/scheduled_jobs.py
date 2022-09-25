@@ -48,6 +48,7 @@ def history_to_tuple(history):
 
 def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
     if not conf or not func_name:
+        app.logger.error(f"call_seat_booker_func not conf:{not conf} or not func_name: {not func_name}")
         return None
     # 实例化
     seat_booker = SeatBooker(conf, app.logger)
@@ -72,10 +73,9 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
                    f"[{mail_tuple[4]}号] 座位！" \
                    f"\n卷爆他们！"
             send_mail(title, body, receiver)
-            app.logger.info(body)
         else:
             # 创建定时取消任务
-            job_id = 'cancel_booking_' + booking_id
+            job_id = 'cancel_booking_' + str(booking_id)
             target_time = int(res["time"]) if res else time.time() + 60 * 10
             cancel_time = time.localtime(target_time + 60 * 25)  # 开始时间25分钟后如果还没签到就自动取消
             if not scheduler.get_job(id=job_id):
@@ -90,7 +90,6 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
                    f"\n错误提示：{stat.name}" \
                    f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
             send_mail(title, body, receiver)
-            app.logger.info(body)
     elif func_name == 'cancel_booking':
         stat, res = seat_booker.cancel_booking(booking_id)
         if stat == SeatBookerStatus.NO_NEED:
@@ -123,7 +122,7 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
     # login过程
     res_login = seat_booker.loop_login(max_failed_time=3)
     if res_login == SeatBookerStatus.LOOP_FAILED:
-        exception_msg = "登录图书馆系统失败，请检查订座信息中学号和洄图平台密码"
+        exception_msg = "登录自习室失败，请检查订座信息中学号和自习室平台密码"
         # 发邮件（登陆失败）
         title = "[guaBookSeat] 预约失败了，快看看啥情况..."
         body = f"您使用[guaBookSeat]预约位置失败了，请立即用小程序或[guaBookSeat]进行手动预约，并检查[guaBookSeat]的设置！" \
@@ -166,7 +165,8 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
         if latest_record["status"] == "0":
             # 创建定时签到任务
             job_id = 'checkin_booking_' + str(latest_record["id"])
-            checkin_time = time.localtime(int(latest_record["time"]) - 60 * 10)  # 提前10分钟自动签到
+            checkin_time_stamp = max(int(latest_record["time"]) - 60 * 10, int(time.time()) + 60 * 1)   # 提前10分钟或下1分钟，取较晚的一个
+            checkin_time = time.localtime(checkin_time_stamp)  # 自动签到
             scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
                               run_date=time.strftime("%Y-%m-%d %H:%M:%S", checkin_time),
                               args=[conf, 'checkin_booking', receiver, latest_record["id"]])

@@ -270,7 +270,7 @@ class SeatBooker:
         # 找到目标记录
         target_record = None
         for record in last_10_records:
-            if str(record.get("id")) == booking_id:
+            if record.get("id") == booking_id:
                 target_record = record
                 break
         return target_record
@@ -279,10 +279,13 @@ class SeatBooker:
         target_record = self.get_target_record(booking_id)
         # 处理target_record结果
         if target_record is None or target_record["status"] != "0":
+            self.logger.warning(
+                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
+                f"target_record[status]!=0: {target_record['status'] if target_record else None}") 
             return SeatBookerStatus.NO_NEED, target_record
         # 开始取消预约
         data = {
-            'bookingId': booking_id,
+            'bookingId': str(booking_id),
         }
         # POST cancel_booking
         status, response_data = self.get_remote_response(url=self.urls['cancel_booking'], method="post", data=data)
@@ -299,11 +302,12 @@ class SeatBooker:
         # 处理target_record结果
         if target_record is None or target_record["status"] != "0":
             self.logger.warning(
-                f"UID:{self.username} booking_id:{booking_id} target_record is None or target_record[status] != 0")
+                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
+                f"target_record[status]!=0: {target_record['status'] if target_record else None}") 
             return SeatBookerStatus.NO_NEED, target_record
         # 开始签到
         data = {
-            'bookingId': booking_id,
+            'bookingId': str(booking_id),
         }
         # POST checkin_booking
         status, response_data = self.get_remote_response(url=self.urls['checkin_booking'], method="post", data=data)
