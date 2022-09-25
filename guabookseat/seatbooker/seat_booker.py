@@ -69,6 +69,7 @@ class SeatBooker:
             'get_my_booking_list': url_home + '/Seat/Index/myBookingList?LAB_JSON=1',
             'cancel_booking': url_home + '/Seat/Index/cancelBooking?LAB_JSON=1',
             'checkin_booking': url_home + '/Seat/Index/checkIn?LAB_JSON=1',
+            'checkout_booking': url_home + '/Seat/Index/checkOut?LAB_JSON=1',
         }
         self.session = requests.session()
         self.session.headers.update(fake_header)
@@ -314,6 +315,29 @@ class SeatBooker:
         if status != SeatBookerStatus.SUCCESS:
             return status, target_record
         # 处理checkin_booking结果
+        if response_data["DATA"]["result"] == "success":
+            return SeatBookerStatus.SUCCESS, target_record
+        else:
+            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['DATA']['msg']}!")
+            return SeatBookerStatus.UNKNOWN_ERROR, target_record
+
+    def checkout_booking(self, booking_id):
+        target_record = self.get_target_record(booking_id)
+        # 处理target_record结果
+        if target_record is None or target_record["status"] != "1":
+            self.logger.warning(
+                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
+                f"target_record[status]!=1: {target_record['status'] if target_record else None}")
+            return SeatBookerStatus.NO_NEED, target_record
+        # 开始签退
+        data = {
+            'bookingId': str(booking_id),
+        }
+        # POST checkin_booking
+        status, response_data = self.get_remote_response(url=self.urls['checkout_booking'], method="post", data=data)
+        if status != SeatBookerStatus.SUCCESS:
+            return status, target_record
+        # 处理checkout_booking结果
         if response_data["DATA"]["result"] == "success":
             return SeatBookerStatus.SUCCESS, target_record
         else:
