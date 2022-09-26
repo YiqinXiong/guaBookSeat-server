@@ -5,12 +5,25 @@
     <ul class="movie-list">
         {% if histories %}
             {% for history in histories[:10] %}  {# 迭代 histories 变量 #}
-                <li><b>{{ history[3] }}</b>&nbsp&nbsp&nbsp&nbsp<b>{{ history[4] }}号座</b><br>
-                    {{ history[1] }} - {{ history[2] }}
+                {% if history[0] in ('已预约，等待签到','已预约，已创建定时签到任务', '使用中') %}
+                    <li>
+                        {% else %}
+                    <li style="color: #999999">
+                {% endif %}
+                <b>{{ history[3] }}&nbsp&nbsp&nbsp&nbsp{{ history[4] }}号座</b>
+                {% if history[0] == '已预约，等待签到' %}
                     <span class="float-right">
-                        {{ history[0] }}
+                        <a class="imdb-blue"
+                           href="{{ url_for('manual_checkin', booking_id=history[5], begin_time=history[6]) }}">
+                            立即签到
+                        </a>
                     </span>
-                </li>
+                {% endif %}
+                <br>
+                {{ history[1] }} - {{ history[2] }}
+                <span class="float-right">
+                    {{ history[0] }}
+                </span>
             {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
         {% else %}
             <li>

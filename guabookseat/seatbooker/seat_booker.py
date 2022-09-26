@@ -305,73 +305,31 @@ class SeatBooker:
                 break
         return target_record
 
-    def cancel_booking(self, booking_id):
-        target_record = self.get_target_record(booking_id)
-        # 处理target_record结果
-        if target_record is None or target_record["status"] != "0":
-            self.logger.warning(
-                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
-                f"target_record[status]!=0: {target_record['status'] if target_record else None}")
-            return SeatBookerStatus.NO_NEED, target_record
-        # 开始取消预约
+    def post_with_booking_id(self, url, booking_id):
         data = {
             'bookingId': str(booking_id),
         }
-        # POST cancel_booking
-        status, response_data = self.get_remote_response(url=self.urls['cancel_booking'], method="post", data=data)
+        # POST
+        status, response_data = self.get_remote_response(url=url, method="post", data=data)
         if status != SeatBookerStatus.SUCCESS:
-            return status, target_record
-        # 处理cancel_booking结果
+            return status
         if response_data["CODE"] == "ok":
-            return SeatBookerStatus.SUCCESS, target_record
+            if ("result" not in response_data["DATA"]) or (response_data["DATA"]["result"] == "success"):
+                return SeatBookerStatus.SUCCESS
+            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['DATA']['msg']}!")
+            return SeatBookerStatus.NO_NEED
         else:
-            return SeatBookerStatus.UNKNOWN_ERROR, target_record
+            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['MESSAGE']}!")
+            return SeatBookerStatus.NO_NEED
+
+    def cancel_booking(self, booking_id):
+        return self.post_with_booking_id(url=self.urls['cancel_booking'], booking_id=booking_id)
 
     def checkin_booking(self, booking_id):
-        target_record = self.get_target_record(booking_id)
-        # 处理target_record结果
-        if target_record is None or target_record["status"] != "0":
-            self.logger.warning(
-                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
-                f"target_record[status]!=0: {target_record['status'] if target_record else None}")
-            return SeatBookerStatus.NO_NEED, target_record
-        # 开始签到
-        data = {
-            'bookingId': str(booking_id),
-        }
-        # POST checkin_booking
-        status, response_data = self.get_remote_response(url=self.urls['checkin_booking'], method="post", data=data)
-        if status != SeatBookerStatus.SUCCESS:
-            return status, target_record
-        # 处理checkin_booking结果
-        if response_data["DATA"]["result"] == "success":
-            return SeatBookerStatus.SUCCESS, target_record
-        else:
-            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['DATA']['msg']}!")
-            return SeatBookerStatus.UNKNOWN_ERROR, target_record
+        return self.post_with_booking_id(url=self.urls['checkin_booking'], booking_id=booking_id)
 
     def checkout_booking(self, booking_id):
-        target_record = self.get_target_record(booking_id)
-        # 处理target_record结果
-        if target_record is None or target_record["status"] != "1":
-            self.logger.warning(
-                f"UID:{self.username} booking_id:{booking_id} target_record is None：{target_record is None} or "
-                f"target_record[status]!=1: {target_record['status'] if target_record else None}")
-            return SeatBookerStatus.NO_NEED, target_record
-        # 开始签退
-        data = {
-            'bookingId': str(booking_id),
-        }
-        # POST checkin_booking
-        status, response_data = self.get_remote_response(url=self.urls['checkout_booking'], method="post", data=data)
-        if status != SeatBookerStatus.SUCCESS:
-            return status, target_record
-        # 处理checkout_booking结果
-        if response_data["DATA"]["result"] == "success":
-            return SeatBookerStatus.SUCCESS, target_record
-        else:
-            self.logger.error(f"UID:{self.username} booking_id:{booking_id} {response_data['DATA']['msg']}!")
-            return SeatBookerStatus.UNKNOWN_ERROR, target_record
+        return self.post_with_booking_id(url=self.urls['checkout_booking'], booking_id=booking_id)
 
     def loop_login(self, max_failed_time):
         # 若login失败可以循环重试，每2s一次，最多允许失败max_failed_time次
@@ -460,16 +418,16 @@ class SeatBooker:
     def loop_checkin_booking(self, booking_id, max_failed_time):
         # 若checkin_booking失败可以循环重试，每2s一次，最多允许失败max_failed_time次
         failed_time = 0
-        stat, target_record = self.checkin_booking(booking_id=booking_id)
+        stat = self.checkin_booking(booking_id=booking_id)
         while stat != SeatBookerStatus.SUCCESS:
             failed_time += 1
             # 无需签到
             if stat == SeatBookerStatus.NO_NEED:
-                return stat, target_record
+                return stat
             # 失败max_failed_time次以上退出checkin_booking流程
             if failed_time > max_failed_time:
-                return SeatBookerStatus.LOOP_FAILED, target_record
+                return SeatBookerStatus.LOOP_FAILED
             # 2秒重试，加上最多5s的罚时（与失败次数正相关）
             time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
-            stat, target_record = self.checkin_booking(booking_id=booking_id)
-        return SeatBookerStatus.SUCCESS, target_record
+            stat = self.checkin_booking(booking_id=booking_id)
+        return SeatBookerStatus.SUCCESS

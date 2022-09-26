@@ -25,7 +25,7 @@ def send_mail(title, body, receiver):
 
 def history_to_tuple(history):
     if not history:
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
     status_map = {
         "0": "已预约，等待签到",
         "1": "使用中",
@@ -42,8 +42,9 @@ def history_to_tuple(history):
     duration_sec = int(history.get("duration"))
     seat_num = history.get("seatNum")
     room_name = history.get("roomName")
+    booking_id = history.get("id")
     start_timestr, end_timestr = get_start_end_timestr(start_timestamp, duration_sec)
-    return status, start_timestr, end_timestr, room_name, seat_num
+    return status, start_timestr, end_timestr, room_name, seat_num, booking_id, start_timestamp
 
 
 def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
@@ -62,9 +63,10 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
         res = [history_to_tuple(history) for history in res] if res else None
         return res
     elif func_name == 'checkin_booking':
-        stat, res = seat_booker.loop_checkin_booking(booking_id=booking_id, max_failed_time=3)
+        stat = seat_booker.loop_checkin_booking(booking_id=booking_id, max_failed_time=3)
         if stat == SeatBookerStatus.NO_NEED:
             return
+        res = seat_booker.get_target_record(booking_id=booking_id)
         target_begin_time = int(res["time"]) if res else time.time() + 60 * 10
         if stat == SeatBookerStatus.SUCCESS:
             ''' 不需要自动签退，到时间后系统会自动签退
@@ -102,9 +104,10 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
                    f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
             send_mail(title, body, receiver)
     elif func_name == 'cancel_booking':
-        stat, res = seat_booker.cancel_booking(booking_id)
+        stat = seat_booker.cancel_booking(booking_id)
         if stat == SeatBookerStatus.NO_NEED:
             return
+        res = seat_booker.get_target_record(booking_id=booking_id)
         if stat == SeatBookerStatus.SUCCESS:
             # 发邮件（取消成功）
             mail_tuple = history_to_tuple(res)
@@ -121,11 +124,12 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
                    f"\n如有bug，请结合错误提示，并与我（发件邮箱）联系。"
             send_mail(title, body, receiver)
     elif func_name == 'checkout_booking':
-        stat, res = seat_booker.checkout_booking(booking_id)
+        stat = seat_booker.checkout_booking(booking_id)
         if stat == SeatBookerStatus.NO_NEED:
             return
         if stat == SeatBookerStatus.SUCCESS:
             # 发邮件（签退成功）
+            res = seat_booker.get_target_record(booking_id=booking_id)
             mail_tuple = history_to_tuple(res)
             title = "[guaBookSeat] 自动签退成功！"
             body = f"已签退 [{mail_tuple[1]}] 到 [{mail_tuple[2]}] 在 [{mail_tuple[3]}] 的 " \
@@ -134,6 +138,9 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
         else:
             # 签退失败
             pass
+    elif func_name == 'checkin_booking_immediately':
+        stat = seat_booker.loop_checkin_booking(booking_id=booking_id, max_failed_time=3)
+        return stat
 
 
 def auto_booking(conf, receiver=None, max_retry_time=12):
@@ -192,9 +199,10 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
             checkin_time_stamp = max(int(latest_record["time"]) - 60 * 10,
                                      int(time.time()) + 60 * 1)  # 提前10分钟或下1分钟，取较晚的一个
             checkin_time = time.localtime(checkin_time_stamp)  # 自动签到
-            scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
-                              run_date=time.strftime("%Y-%m-%d %H:%M:%S", checkin_time),
-                              args=[conf, 'checkin_booking', receiver, latest_record["id"]])
+            if not scheduler.get_job(id=job_id):
+                scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
+                                  run_date=time.strftime("%Y-%m-%d %H:%M:%S", checkin_time),
+                                  args=[conf, 'checkin_booking', receiver, latest_record["id"]])
             app.logger.info(f"UID:{student_id} CREATE AUTO_CHECKIN_JOB SUCCESS!")
             # 发邮件（成功）
             mail_tuple = history_to_tuple(latest_record)

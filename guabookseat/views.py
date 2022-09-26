@@ -1,4 +1,5 @@
 import threading
+import time
 
 from flask import render_template, request, url_for, redirect, flash
 from flask_login import login_user, login_required, logout_user, current_user
@@ -7,6 +8,7 @@ from guabookseat import app, db, scheduler
 from guabookseat.constants import Constants
 from guabookseat.models import User, UserConfig
 from guabookseat.scheduled_jobs import call_seat_booker_func, auto_booking
+from guabookseat.seatbooker.seat_booker import SeatBookerStatus
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -205,6 +207,15 @@ def show_booking_list():
         current_config = UserConfig.query.filter_by(id=current_user.id).first()
         histories = call_seat_booker_func(conf=current_config.get_config(),
                                           func_name='get_histories') if current_config else None
+        histories = [list(his) for his in histories]
+        # 筛选出需要手动签到的项
+        for his in histories:
+            if his[0] == '已预约，等待签到':
+                booking_id = his[5]
+                job_id = 'checkin_booking_' + str(booking_id)
+                if scheduler.get_job(id=job_id):
+                    his[0] = '已预约，已创建定时签到任务'
+
     return render_template('show-booking-list.html', histories=histories)
 
 
@@ -216,3 +227,39 @@ def manual_booking():
     new_thread.start()
     flash("手动预约任务正在后台运行！")
     return redirect(url_for('index'))
+
+
+@app.route('/manual-checkin')
+@login_required
+def manual_checkin():
+    if request.method == "GET":
+        booking_id = int(request.args.get('booking_id'))
+        begin_time_stamp = request.args.get('begin_time')
+        checkin_time_stamp = int(begin_time_stamp) - 60 * 10  # 提前10分钟
+
+        userconfig = UserConfig.query.filter_by(id=current_user.id).first()
+        conf = userconfig.get_config()
+        receiver = current_user.mail_address
+
+        if checkin_time_stamp <= time.time():
+            # 立即签到
+            stat = call_seat_booker_func(conf=conf, func_name='checkin_booking_immediately',
+                                         receiver=receiver, booking_id=booking_id)
+            if stat == SeatBookerStatus.SUCCESS:
+                flash("签到成功！")
+            elif stat == SeatBookerStatus.NO_NEED:
+                flash("无需签到！")
+            else:
+                flash("签到失败，请重试！")
+        else:
+            # 创建定时签到任务
+            job_id = 'checkin_booking_' + str(booking_id)
+            checkin_time = time.localtime(checkin_time_stamp)
+            if not scheduler.get_job(id=job_id):
+                scheduler.add_job(id=job_id, func=call_seat_booker_func, trigger='date',
+                                  run_date=time.strftime("%Y-%m-%d %H:%M:%S", checkin_time),
+                                  args=[conf, 'checkin_booking', receiver, booking_id])
+            app.logger.info(f"UID:{conf['username']} CREATE AUTO_CHECKIN_JOB SUCCESS!")
+            flash("未到签到时段，已创建定时签到任务，到时会自动签到")
+
+    return redirect(url_for('show_booking_list'))
