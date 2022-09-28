@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h3>&nbsp&nbsp精简日志</h3>
+    <ul class="movie-list">
+        {% if date_logs %}
+            {% for date_log in date_logs %}  {# 迭代 date_logs #}
+                <li>
+                    <b>{{ date_log[0] }}</b>
+                    <br>
+                    <label>
+                        <textarea style="border-width: 3px; resize: none;">{{ date_log[1] }}</textarea>
+                    </label>
+                </li>
+            {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
+        {% else %}
+            <li>
+                <b>暂无日志</b>
+            </li>
+        {% endif %}
+    </ul>
+
+    <h3>&nbsp&nbspFlask运行日志</h3>
+    <ul class="movie-list">
+    <li>
+        <label>
+            {% if flask_log %}
+                <textarea style="border-width: 3px; resize: none; height: 500px">{{ flask_log }}</textarea>
+            {% endif %}
+        </label>
+    </li>
+    </ul>
+{% endblock %}

@@ -27,6 +27,9 @@
                     <li><a href="{{ url_for('set_auto_booking') }}">自动预约设置</a></li>
                     <li><a href="{{ url_for('show_booking_list') }}">我的预约</a></li>
                 {% endif %}
+                {% if current_user.username == "admin" %}
+                    <li><a href="{{ url_for('show_log') }}">查看日志</a></li>
+                {% endif %}
             <li><a href="{{ url_for('logout') }}">注销</a></li>
             {% else %}
             <li><a href="{{ url_for('logon') }}">注册</a></li>

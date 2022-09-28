@@ -1,10 +1,11 @@
+import os
 import threading
 import time
 
 from flask import render_template, request, url_for, redirect, flash
 from flask_login import login_user, login_required, logout_user, current_user
 
-from guabookseat import app, db, scheduler
+from guabookseat import app, db, scheduler, log_dir, log_file_name
 from guabookseat.constants import Constants
 from guabookseat.models import User, UserConfig
 from guabookseat.scheduled_jobs import call_seat_booker_func, auto_booking
@@ -263,3 +264,38 @@ def manual_checkin():
             flash("未到签到时段，已创建定时签到任务，到时会自动签到")
 
     return redirect(url_for('show_booking_list'))
+
+
+@app.route('/show-log')
+@login_required
+def show_log():
+    date_logs = []
+    flask_log = None
+    # 遍历日志文件夹
+    date_log_dir = log_dir
+    date_log_prefix = log_file_name
+    for date_log_name in os.listdir(date_log_dir):
+        if date_log_name.startswith(date_log_prefix):
+            suffix = date_log_name.split(date_log_prefix)[1]  # 后缀，比如 ".2022-09-28.log"
+            date = suffix.split('.')[1] if suffix else "最新日志"
+            try:
+                with open(os.path.join(date_log_dir, date_log_name), 'r') as f:
+                    log_content = f.read()
+            except UnicodeDecodeError:
+                with open(os.path.join(date_log_dir, date_log_name), 'r', encoding='gbk') as f:
+                    log_content = f.read()
+            date_logs.append((date, log_content))
+    date_logs.sort(reverse=True)    # 排序
+    # 打开Flask日志文件
+    flask_log_dir = os.path.dirname(date_log_dir)
+    flask_log_name = "flask.log"
+    try:
+        with open(os.path.join(flask_log_dir, flask_log_name), 'r') as f:
+            flask_log = "".join(f.readlines()[:100])
+    except FileNotFoundError:
+        pass
+    except UnicodeDecodeError:
+        with open(os.path.join(flask_log_dir, flask_log_name), 'r', encoding='utf-16') as f:
+            flask_log = "".join(f.readlines()[:100])
+
+    return render_template('show-log.html', date_logs=date_logs, flask_log=flask_log)

@@ -154,3 +154,16 @@ footer {
     text-align: center;
     padding: 10px;
 }
+
+textarea {
+    display: block;
+    margin: auto;
+    overflow: auto;
+    word-break: break-all;
+    width: 100%;
+    font-size: 12px;
+    height: 200px;
+
+    outline: none;
+    border-radius: 5px;
+}

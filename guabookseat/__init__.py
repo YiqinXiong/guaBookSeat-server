@@ -19,7 +19,8 @@ app.config.from_object(MyFlaskConfig())
 # set logger
 log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'log')
 os.makedirs(name=log_dir, exist_ok=True)
-log_file_path = os.path.join(log_dir, "LOG-guaBookSeat")
+log_file_name = "LOG-guaBookSeat"
+log_file_path = os.path.join(log_dir, log_file_name)
 trh = TimedRotatingFileHandler(filename=log_file_path, encoding='utf-8', backupCount=7, when='MIDNIGHT', interval=1)
 trh.suffix = "%Y-%m-%d.log"
 trh.extMatch = re.compile(r"^\d{4}-\d{2}-\d{2}.log$")
