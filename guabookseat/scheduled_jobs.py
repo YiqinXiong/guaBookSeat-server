@@ -56,7 +56,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
         seat_booker = SeatBooker(conf, app.logger)
     except RuntimeError as e:
         app.logger.critical(f"SeatBooker: {str(e)}")
-        return None
+        raise e
     # 执行过程
     if func_name == 'get_histories':
         _, res = seat_booker.get_my_booking_list()
@@ -145,6 +145,7 @@ def call_seat_booker_func(conf, func_name, receiver=None, booking_id=None):
 
 def auto_booking(conf, receiver=None, max_retry_time=12):
     if not conf:
+        app.logger.error(f"auto_booking not conf")
         return
     student_id = conf["username"]
     exception_msg = None

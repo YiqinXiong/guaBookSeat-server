@@ -206,16 +206,21 @@ def show_booking_list():
     if current_user.is_authenticated:
         # 获取当前histories（可能为None）
         current_config = UserConfig.query.filter_by(id=current_user.id).first()
-        histories = call_seat_booker_func(conf=current_config.get_config(),
-                                          func_name='get_histories') if current_config else None
-        histories = [list(his) for his in histories]
-        # 筛选出需要手动签到的项
-        for his in histories:
-            if his[0] == '已预约，等待签到':
-                booking_id = his[5]
-                job_id = 'checkin_booking_' + str(booking_id)
-                if scheduler.get_job(id=job_id):
-                    his[0] = '已预约，已创建定时签到任务'
+        try:
+            histories = call_seat_booker_func(conf=current_config.get_config(),
+                                              func_name='get_histories') if current_config else None
+        except RuntimeError as e:
+            flash(str(e))
+        else:
+            if histories:
+                histories = [list(his) for his in histories]
+                # 筛选出需要手动签到的项
+                for his in histories:
+                    if his[0] == '已预约，等待签到':
+                        booking_id = his[5]
+                        job_id = 'checkin_booking_' + str(booking_id)
+                        if scheduler.get_job(id=job_id):
+                            his[0] = '已预约，已创建定时签到任务'
 
     return render_template('show-booking-list.html', histories=histories)
 
@@ -244,14 +249,18 @@ def manual_checkin():
 
         if checkin_time_stamp <= time.time():
             # 立即签到
-            stat = call_seat_booker_func(conf=conf, func_name='checkin_booking_immediately',
-                                         receiver=receiver, booking_id=booking_id)
-            if stat == SeatBookerStatus.SUCCESS:
-                flash("签到成功！")
-            elif stat == SeatBookerStatus.NO_NEED:
-                flash("无需签到！")
+            try:
+                stat = call_seat_booker_func(conf=conf, func_name='checkin_booking_immediately',
+                                             receiver=receiver, booking_id=booking_id)
+            except RuntimeError as e:
+                flash(str(e))
             else:
-                flash("签到失败，请重试！")
+                if stat == SeatBookerStatus.SUCCESS:
+                    flash("签到成功！")
+                elif stat == SeatBookerStatus.NO_NEED:
+                    flash("无需签到！")
+                else:
+                    flash("签到失败，请重试！")
         else:
             # 创建定时签到任务
             job_id = 'checkin_booking_' + str(booking_id)
@@ -285,7 +294,7 @@ def show_log():
                 with open(os.path.join(date_log_dir, date_log_name), 'r', encoding='gbk') as f:
                     log_content = f.read()
             date_logs.append((date, log_content))
-    date_logs.sort(reverse=True)    # 排序
+    date_logs.sort(reverse=True)  # 排序
     # 打开Flask日志文件
     flask_log_dir = os.path.dirname(date_log_dir)
     flask_log_name = "flask.log"
