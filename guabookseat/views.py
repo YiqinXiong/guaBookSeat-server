@@ -291,11 +291,11 @@ def show_log():
     flask_log_name = "flask.log"
     try:
         with open(os.path.join(flask_log_dir, flask_log_name), 'r') as f:
-            flask_log = "".join(f.readlines()[:100])
+            flask_log = "".join(f.readlines()[-200:])
     except FileNotFoundError:
         pass
     except UnicodeDecodeError:
         with open(os.path.join(flask_log_dir, flask_log_name), 'r', encoding='utf-16') as f:
-            flask_log = "".join(f.readlines()[:100])
+            flask_log = "".join(f.readlines()[-200:])
 
     return render_template('show-log.html', date_logs=date_logs, flask_log=flask_log)
