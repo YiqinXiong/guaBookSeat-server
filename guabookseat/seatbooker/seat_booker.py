@@ -80,7 +80,7 @@ class SeatBooker:
         if user_cookie:
             if user_cookie.is_expired():
                 # 登录
-                stat = self.loop_login(max_failed_time=5)
+                stat = self.loop_login(max_failed_time=2)
                 if stat != SeatBookerStatus.SUCCESS:
                     raise RuntimeError("cookie过期且登陆失败")
                 # 更新cookie
@@ -92,7 +92,7 @@ class SeatBooker:
                 self.uid = user_cookie.get_uid()
         else:
             # 登录
-            stat = self.loop_login(max_failed_time=5)
+            stat = self.loop_login(max_failed_time=2)
             if stat != SeatBookerStatus.SUCCESS:
                 raise RuntimeError("无cookie且登陆失败")
             # 保存cookie
@@ -332,7 +332,7 @@ class SeatBooker:
         return self.post_with_booking_id(url=self.urls['checkout_booking'], booking_id=booking_id)
 
     def loop_login(self, max_failed_time):
-        # 若login失败可以循环重试，每2s一次，最多允许失败max_failed_time次
+        # 若login失败可以循环重试，最多允许失败max_failed_time次
         failed_time = 0
         stat = self.login()
         while stat != SeatBookerStatus.SUCCESS:
@@ -340,8 +340,8 @@ class SeatBooker:
             # 失败max_failed_time次以上退出login流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
-            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            # 0.5秒重试
+            time.sleep(0.5)
             # 如果是PROXY_ERROR，则修改代理
             if stat == SeatBookerStatus.PROXY_ERROR:
                 proxy = {
