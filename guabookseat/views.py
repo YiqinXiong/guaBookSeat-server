@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 import time
@@ -176,9 +177,20 @@ def set_config():
 
     return render_template('set-config.html', valid_rooms=Constants.valid_rooms,
                            valid_start_times=Constants.valid_start_times,
-                           valid_durations=Constants.valid_durations,
+                           max_end_time=Constants.MAX_END_TIME,
                            valid_start_time_delta_limits=Constants.valid_start_time_delta_limits,
                            valid_duration_delta_limits=Constants.valid_duration_delta_limits)
+
+
+@app.route('/get-valid-durations', methods=['GET', 'POST'])
+@login_required
+def get_valid_durations():
+    if request.method == 'POST':
+        data = request.get_json()
+        start_time = int(data['start_time'])
+        cur_max_end_time = Constants.MAX_END_TIME - start_time
+        valid_durations = [x for x in range(3, cur_max_end_time + 1)]
+        return json.dumps(valid_durations)
 
 
 @app.route('/pause-auto-booking')

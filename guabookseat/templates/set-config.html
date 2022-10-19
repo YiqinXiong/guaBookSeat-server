@@ -1,6 +1,44 @@
 {% extends 'base.html' %}
 
 {% block content %}
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        function onchange_start(choose, id, url, default_duration) {
+            var data;
+            var select = document.getElementById(choose);
+            var duration_list = document.getElementById(id);
+            duration_list.innerHTML = ""; //清空
+            for (i = 0; i < select.length; i++) {
+                if (select[i].selected) {
+                    data = {
+                        "start_time": select[i].value
+                    };
+                    $.post({ //发起ajax请求
+                        url: url,
+                        type: "POST",
+                        data: JSON.stringify(data),
+                        contentType: "application/json; charset=UTF-8",
+                        success: function (data) {
+                            data = JSON.parse(data)
+                            var no_select = true;
+                            if (data) {
+                                for (i = 0; i < data.length; i++) {
+                                    if (data[i] == default_duration || (no_select && i === data.length - 1)) {
+                                        no_select = false;
+                                        duration_list.innerHTML += "<option selected='selected' value='" + data[i] + "'>" + data[i] + " 小时</option>"
+                                    } else {
+                                        duration_list.innerHTML += "<option value='" + data[i] + "'>" + data[i] + " 小时</option>"
+                                    }
+                                }
+                            } else {
+                                alert('获取下拉菜单失败');
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    </script>
     <h3>&nbsp&nbsp设置订座信息</h3>
     <form method="post">
         <ul class="movie-list">
@@ -29,7 +67,8 @@
                 </span>
             </li>
             <li><b>开始时间：&nbsp&nbsp</b>
-                <select name="start_time">
+                <select name="start_time" id="select_start_time"
+                        onchange="onchange_start('select_start_time','select_duration','/get-valid-durations',{{ config.duration }})">
                     {% for v_start_time in valid_start_times %}
                         {% if v_start_time==(config.start_time if config else 9) %}
                             <option value={{ v_start_time }} selected>{{ v_start_time }}:00</option>
@@ -52,8 +91,8 @@
                 </span>
             </li>
             <li><b>持续时间：&nbsp&nbsp</b>
-                <select name="duration">
-                    {% for v_duration in valid_durations %}
+                <select name="duration" id="select_duration">
+                    {% for v_duration in range(3, max_end_time - (config.start_time if config else 9) + 1) %}
                         {% if v_duration==(config.duration if config else 13) %}
                             <option value={{ v_duration }} selected>{{ v_duration }} 小时</option>
                         {% else %}
