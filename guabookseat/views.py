@@ -345,7 +345,9 @@ def show_tables():
     cursor.close()
     conn.close()
     apscheduler_jobs_head = [('任务ID', '下次运行时间')]
-    apscheduler_jobs_content = apscheduler_jobs_head + apscheduler_jobs_content
+    apscheduler_jobs_content = apscheduler_jobs_head + [
+        (x[0], time.strftime("%Y-%m-%d %H:%M", time.localtime(x[1])) if x[1] else "已暂停")
+        for x in apscheduler_jobs_content]
 
     tables = {
         '用户信息': user_content,
