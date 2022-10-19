@@ -167,3 +167,15 @@ textarea {
     outline: none;
     border-radius: 5px;
 }
+
+table {
+    border-collapse: collapse;
+    margin: auto;
+    width: 100%;
+}
+
+th,td {
+    border: 1px solid black;
+    font-size: 12px;
+    text-align: center;
+}

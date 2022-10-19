@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import threading
 import time
 
@@ -320,3 +321,36 @@ def show_log():
             flask_log = "".join(f.readlines()[-200:])
 
     return render_template('show-log.html', date_logs=date_logs, flask_log=flask_log)
+
+
+@app.route('/show-tables')
+@login_required
+def show_tables():
+    user_content = User.query.all()
+    user_head = [('用户ID', '用户名', '邮箱')]
+    user_content = user_head + [(x.id, x.username, x.mail_address) for x in user_content]
+
+    user_config_content = UserConfig.query.all()
+    user_config_head = [('设置ID', '用户ID', '学号', '密码', '自习室', '开始', '持续', '开始offset', '持续offset', '座位')]
+    user_config_content = user_config_head + [
+        (x.cid, x.id, x.student_id, x.student_pwd, Constants.valid_rooms[x.content_id], x.start_time,
+         x.duration, x.start_time_delta_limit, x.duration_delta_limit, x.target_seat) for x in
+        user_config_content]
+
+    task_db_path = os.path.join(os.path.dirname(__file__), 'booking_tasks.db')
+    conn = sqlite3.connect(task_db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, next_run_time from apscheduler_jobs")
+    apscheduler_jobs_content = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    apscheduler_jobs_head = [('任务ID', '下次运行时间')]
+    apscheduler_jobs_content = apscheduler_jobs_head + apscheduler_jobs_content
+
+    tables = {
+        '用户信息': user_content,
+        '用户设置信息': user_config_content,
+        '定时任务信息': apscheduler_jobs_content,
+    }
+
+    return render_template('show-tables.html', tables=tables)

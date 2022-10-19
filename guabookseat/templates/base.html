@@ -29,6 +29,7 @@
                 {% endif %}
                 {% if current_user.username == "admin" %}
                     <li><a href="{{ url_for('show_log') }}">查看日志</a></li>
+                    <li><a href="{{ url_for('show_tables') }}">用户数据</a></li>
                 {% endif %}
             <li><a href="{{ url_for('logout') }}">注销</a></li>
             {% else %}
