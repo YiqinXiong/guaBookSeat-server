@@ -9,7 +9,7 @@
                     <b>{{ date_log[0] }}</b>
                     <br>
                     <label>
-                        <textarea style="border-width: 3px; resize: none;">{{ date_log[1] }}</textarea>
+                        <textarea readonly style="border-width: 3px; resize: none;">{{ date_log[1] }}</textarea>
                     </label>
                 </li>
             {% endfor %}  {# 使用 endfor 标签结束 for 语句 #}
@@ -25,7 +25,7 @@
     <li>
         <label>
             {% if flask_log %}
-                <textarea style="border-width: 3px; resize: none; height: 500px">{{ flask_log }}</textarea>
+                <textarea readonly style="border-width: 3px; resize: none; height: 500px">{{ flask_log }}</textarea>
             {% endif %}
         </label>
     </li>
