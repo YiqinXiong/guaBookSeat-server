@@ -191,8 +191,9 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
 
     # 最后获取用户预约信息并发邮件
     if not already_booked:
-        status, latest_record = seat_booker.loop_get_latest_record(max_failed_time=5)
+        status, latest_record = seat_booker.loop_get_latest_record(max_failed_time=10)
         if status != SeatBookerStatus.SUCCESS:
+            app.logger.error(f"UID:{student_id} loop_get_latest_record failed:{status.name}!")
             return
         if latest_record["status"] == "0":
             # 创建定时签到任务
@@ -223,3 +224,4 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
     else:
         # 已有预约
         pass
+    app.logger.error(f"UID:{student_id} auto_booking quit successfully!")

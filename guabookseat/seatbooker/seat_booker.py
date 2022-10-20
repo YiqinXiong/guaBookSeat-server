@@ -148,8 +148,10 @@ class SeatBooker:
             else:
                 response = self.session.get(url=url, proxies=self.session.proxies, timeout=5)
         except requests.exceptions.ReadTimeout:
+            self.logger.error(f"UID:{self.username} url:{url} {method} error:requests.exceptions.ReadTimeout")
             return SeatBookerStatus.TIME_OUT, None
         except requests.exceptions.SSLError:
+            self.logger.error(f"UID:{self.username} url:{url} {method} error:requests.exceptions.SSLError")
             return SeatBookerStatus.PROXY_ERROR, None
         except Exception as e:
             self.logger.error(f"UID:{self.username} url:{url} {method} error:{str(e)}")
