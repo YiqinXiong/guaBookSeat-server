@@ -25,7 +25,7 @@ trh = TimedRotatingFileHandler(filename=log_file_path, encoding='utf-8', backupC
 trh.suffix = "%Y-%m-%d.log"
 trh.extMatch = re.compile(r"^\d{4}-\d{2}-\d{2}.log$")
 trh.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] (%(funcName)s) %(message)s"))
-trh.setLevel(logging.DEBUG)
+trh.setLevel(logging.INFO)
 app.logger.addHandler(trh)
 # set database
 # 定义命名惯例

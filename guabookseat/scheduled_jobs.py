@@ -224,4 +224,4 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
     else:
         # 已有预约
         pass
-    app.logger.error(f"UID:{student_id} auto_booking quit successfully!")
+    app.logger.info(f"UID:{student_id} auto_booking quit successfully!")
