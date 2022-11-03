@@ -222,16 +222,24 @@ class SeatBooker:
         if status != SeatBookerStatus.SUCCESS:
             return status
         # 处理search_seat结果
-        if "data" not in response_data.keys():
-            return SeatBookerStatus.NO_SEAT
-        # 处理系统自动调整的时间
-        if not response_data["content"]["children"][1]["ifAdjust"]:
-            # 系统未自动调整时间
-            pass
+        if "content" not in response_data.keys() or "children" not in response_data["content"].keys() or not \
+                response_data["content"]["children"] or len(response_data["content"]["children"]) == 0:
+            self.logger.error(f"UID:{self.username} UNKNOWN_ERROR {response_data}")
+            return SeatBookerStatus.UNKNOWN_ERROR
         else:
+            res_content_children = response_data["content"]["children"]
+            if_adjust = res_content_children[0]["ifAdjust"]
+            if_have = res_content_children[0]["ifHave"]
+        # 无位置
+        if "data" not in response_data.keys() or not if_have:
+            return SeatBookerStatus.NO_SEAT
+        else:
+            res_data = response_data["data"]
+        # 处理系统自动调整的时间
+        if if_adjust:
             # 系统自动调整时间，如果太离谱就不接受
-            valid_start_time = response_data["content"]["children"][1]["adjustDate"]
-            valid_duration = response_data["content"]["children"][1]["adjustTime"]
+            valid_start_time = res_content_children[1]["adjustDate"]
+            valid_duration = res_content_children[1]["adjustTime"]
             valid_start_time_delta = valid_start_time - self.start_time
             valid_duration_delta = valid_duration - self.duration
             start_timestr = time.strftime("%m-%d %H:%M", time.localtime(self.start_time))
@@ -249,12 +257,12 @@ class SeatBooker:
         # 开始选座
         if self.seat_id == 0:
             # 选系统推荐的座位
-            self.target_seat = response_data["data"]["bestPairSeats"]["seats"][0]["id"]
-            self.target_seat_title = response_data["data"]["bestPairSeats"]["seats"][0]["title"]
+            self.target_seat = res_data["bestPairSeats"]["seats"][0]["id"]
+            self.target_seat_title = res_data["bestPairSeats"]["seats"][0]["title"]
         else:
             # 选距离目标座位最近的一个座位，且最好是奇数
             min_abs = 1e10  # 初始值inf
-            for seat in response_data["data"]["POIs"]:
+            for seat in res_data["POIs"]:
                 cur_seat_title = int(seat['title'])
                 # 筛选出可选的位置中，距离目标座位最近的一个
                 if seat['state'] == 0 or seat['state'] == 2:
@@ -286,12 +294,13 @@ class SeatBooker:
         if response_data["CODE"] == "ok":
             return SeatBookerStatus.SUCCESS
         else:
-            self.logger.warning(f"UID:{self.username} BOOKING_FAILED:{response_data['DATA']['msg']}")
             if response_data["CODE"] == "ParamError":
                 if "已有预约" in response_data["MESSAGE"]:
                     return SeatBookerStatus.ALREADY_BOOKED
+                self.logger.warning(f"UID:{self.username} PARAM_ERROR {response_data['MESSAGE']}!")
                 return SeatBookerStatus.PARAM_ERROR
             else:
+                self.logger.warning(f"UID:{self.username} UNKNOWN_ERROR {response_data}!")
                 return SeatBookerStatus.UNKNOWN_ERROR
 
     def get_latest_record(self):

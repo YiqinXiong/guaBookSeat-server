@@ -169,7 +169,7 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
     while retry_time > 0:
         try:
             # 开始search_seat
-            res_search_seat = seat_booker.loop_search_seat(max_failed_time=10)
+            res_search_seat = seat_booker.loop_search_seat(max_failed_time=5)
             # 若search_seat大失败，直接重新尝试一轮
             if res_search_seat != SeatBookerStatus.SUCCESS:
                 continue
