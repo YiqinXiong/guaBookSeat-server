@@ -150,7 +150,7 @@ def set_auto_booking():
             flash(flash_str)
         return redirect(url_for('index'))
 
-    return render_template('set-auto-booking.html')
+    return render_template('set-auto-booking.html', default_time=Constants.MAX_END_TIME)
 
 
 @app.route('/set-config', methods=['GET', 'POST'])

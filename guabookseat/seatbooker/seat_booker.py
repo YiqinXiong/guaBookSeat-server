@@ -4,19 +4,33 @@ import time
 from enum import Enum
 from random import randint
 from guabookseat.models import UserCookie
+from guabookseat.constants import Constants
 from guabookseat import db
 
 import requests
 
 
 def get_start_time(conf_start_time):
+    # 获取当前时间
+    now = datetime.datetime.now()
     # 获取今日0点时间戳
-    now_hour = datetime.datetime.now().hour
     today = datetime.date.today()
     today_timestamp = int(time.mktime(today.timetuple()))
-    # 若今日未到22:00，则预约今日自习室，否则预约明日自习室
-    return (today_timestamp + 3600 * conf_start_time) if now_hour < 22 else (
-            today_timestamp + 86400 + 3600 * conf_start_time)
+    # 若今日未到MAX_END_TIME(刷新时间，浮动半小时)，则预约今日自习室，否则预约明日自习室
+    today_start_time = today_timestamp + 3600 * conf_start_time
+    if (now.hour < Constants.MAX_END_TIME - 1) or (now.hour == Constants.MAX_END_TIME - 1 and now.minute < 30):
+        return today_start_time
+    else:
+        return today_start_time + 86400
+
+
+def get_penalty_time(failed_time, max_failed_time):
+    # 基本间隔秒数
+    penalty_base = 1
+    # 最大罚时秒数
+    penalty_max = 4
+    # penalty_base秒重试，加上最多penalty_max秒的罚时（与失败次数正相关）
+    return penalty_base + ((failed_time / max_failed_time) ** 2) * penalty_max
 
 
 # SeatBooker状态枚举类
@@ -122,13 +136,13 @@ class SeatBooker:
             valid_start_time_delta = round(randint(-border, border) / 3600) * 3600
             valid_duration_delta = round(randint(-2 * border, border) / 3600) * 3600
             # 限制valid_start_time_delta范围
-            start_time_delta_lower_bound = get_start_time(7) - self.start_time  # 开始时间不早于7点
-            start_time_delta_upper_bound = get_start_time(19) - self.start_time  # 开始时间不晚于19点
+            start_time_delta_lower_bound = get_start_time(Constants.MIN_START_TIME) - self.start_time  # 开始时间下界
+            start_time_delta_upper_bound = get_start_time(Constants.MAX_START_TIME) - self.start_time  # 开始时间上界
             valid_start_time_delta = min(valid_start_time_delta, start_time_delta_upper_bound)
             valid_start_time_delta = max(valid_start_time_delta, start_time_delta_lower_bound)
             # 限制valid_duration_delta范围
-            duration_delta_upper_bound = get_start_time(22) - (
-                    self.start_time + valid_start_time_delta) - self.duration  # 结束时间不超过22点
+            duration_delta_upper_bound = get_start_time(Constants.MAX_END_TIME) - (
+                    self.start_time + valid_start_time_delta) - self.duration  # 结束时间上界
             valid_duration_delta = min(valid_duration_delta, duration_delta_upper_bound)
             # 检验结果是否可接受
             if self.is_time_affordable(valid_start_time_delta, valid_duration_delta):
@@ -369,8 +383,8 @@ class SeatBooker:
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} SEARCH_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
-            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            # 重试等待
+            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
             # 无位置时大幅调整预定时间和时长
             if stat == SeatBookerStatus.NO_SEAT:
                 self.logger.debug(f"UID:{self.username} SEARCH_SEAT NO_SEAT!")
@@ -397,8 +411,8 @@ class SeatBooker:
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} BOOK_SEAT FAILED!")
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
-            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            # 重试等待
+            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
             stat = self.book_seat()
         self.logger.info(f"UID:{self.username} BOOK_SEAT SUCCESS!")
         return SeatBookerStatus.SUCCESS
@@ -412,8 +426,8 @@ class SeatBooker:
             # 失败max_failed_time次以上退出get_latest_record流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED, None
-            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
-            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            # 重试等待
+            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
             stat, latest_record = self.get_latest_record()
         return SeatBookerStatus.SUCCESS, latest_record
 
@@ -429,7 +443,7 @@ class SeatBooker:
             # 失败max_failed_time次以上退出checkin_booking流程
             if failed_time > max_failed_time:
                 return SeatBookerStatus.LOOP_FAILED
-            # 2秒重试，加上最多5s的罚时（与失败次数正相关）
-            time.sleep(2 + ((failed_time / max_failed_time) ** 2) * 5)
+            # 重试等待
+            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
             stat = self.checkin_booking(booking_id=booking_id)
         return SeatBookerStatus.SUCCESS
