@@ -144,9 +144,9 @@ class SeatBooker:
         # 尝试post/get
         try:
             if method == "post":
-                response = self.session.post(url=url, data=data, proxies=self.session.proxies)
+                response = self.session.post(url=url, data=data, proxies=self.session.proxies, timeout=(4.05, 8.05))
             else:
-                response = self.session.get(url=url, proxies=self.session.proxies, timeout=5)
+                response = self.session.get(url=url, proxies=self.session.proxies, timeout=(4.05, 8.05))
         except requests.exceptions.ReadTimeout:
             self.logger.error(f"UID:{self.username} url:{url} {method} error:requests.exceptions.ReadTimeout")
             return SeatBookerStatus.TIME_OUT, None
