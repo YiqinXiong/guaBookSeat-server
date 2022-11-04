@@ -142,3 +142,6 @@ config.json
 
 # flask-migrate
 migrations/
+
+# seat map
+seat_map.json

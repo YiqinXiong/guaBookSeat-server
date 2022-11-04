@@ -31,4 +31,16 @@
             </li>
         {% endif %}
     </ul>
+    <h3>&nbsp&nbsp更新座位表</h3>
+    <ul class="movie-list">
+        <li>
+            <b>更新座位表</b>
+            <span class="float-right">
+                    <a class="imdb-blue"
+                       href="{{ url_for('manual_refresh_seat_map') }}">
+                        立即更新
+                    </a>
+            </span>
+        </li>
+    </ul>
 {% endblock %}

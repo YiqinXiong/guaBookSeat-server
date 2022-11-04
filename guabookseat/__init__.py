@@ -12,6 +12,7 @@ from flask_migrate import Migrate
 from sqlalchemy import MetaData
 
 from guabookseat.settings import MyFlaskConfig
+from guabookseat.seat_map import SeatMap
 
 app = Flask(__name__)
 # set app config
@@ -46,6 +47,8 @@ scheduler = APScheduler(scheduler=BackgroundScheduler(), app=app)
 scheduler.start()
 # set migrate
 migrate = Migrate(app=app, db=db, render_as_batch=True)
+# load SeatMap
+global_seat_map = SeatMap()
 
 
 @login_manager.user_loader

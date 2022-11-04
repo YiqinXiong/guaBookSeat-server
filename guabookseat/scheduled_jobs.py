@@ -1,9 +1,10 @@
 import time
-
+import json
 from flask_mail import Message
 
-from guabookseat import scheduler, mail, app
+from guabookseat import scheduler, mail, app, global_seat_map
 from guabookseat.seatbooker.seat_booker import SeatBooker, SeatBookerStatus
+from guabookseat.constants import Constants
 
 
 def get_start_end_timestr(start_time, duration):
@@ -163,16 +164,20 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
         send_mail(title, body, receiver)
         return
 
+    # 预设置target_seat以避免search_seat的高延迟
+    res_set_target = seat_booker.set_target_seat()
     # 总共尝试max_retry_time次search_seat和book_seat的过程
     already_booked = False
-    retry_time = max_retry_time
-    while retry_time > 0:
+    retry_time = 0
+    while retry_time <= max_retry_time:
         try:
-            # 开始search_seat
-            res_search_seat = seat_booker.loop_search_seat(max_failed_time=5)
-            # 若search_seat大失败，直接重新尝试一轮
-            if res_search_seat != SeatBookerStatus.SUCCESS:
-                continue
+            # 前2次使用预设置的target_seat，跳过search_seat
+            if retry_time > 1 or res_set_target != SeatBookerStatus.SUCCESS:
+                # 开始search_seat
+                res_search_seat = seat_booker.loop_search_seat(max_failed_time=5)
+                # 若search_seat大失败，直接重新尝试一轮
+                if res_search_seat != SeatBookerStatus.SUCCESS:
+                    continue
             # 开始book_seat
             res_book_seat = seat_booker.loop_book_seat(max_failed_time=10)
             # 若已有预约则退出
@@ -186,7 +191,7 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
             app.logger.critical(f"UID:{student_id} raise an Exception in booking progress:\n{e}!")
             exception_msg = str(e)
         finally:
-            retry_time -= 1  # 重试机会减少
+            retry_time += 1  # 重试次数增加
             time.sleep(2)
 
     # 最后获取用户预约信息并发邮件
@@ -225,3 +230,30 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
         # 已有预约
         pass
     app.logger.info(f"UID:{student_id} auto_booking quit successfully!")
+
+
+def refresh_map(conf_list):
+    # 用任意一个可用的conf实例化SeatBooker
+    seat_booker = None
+    for each_conf in conf_list:
+        conf = each_conf.get_config()
+        # 实例化
+        try:
+            seat_booker = SeatBooker(conf, app.logger)
+            break
+        except RuntimeError:
+            continue
+    if not seat_booker:
+        app.logger.error("No valid conf for SeatMap refresh_map, all of conf are login failed")
+        return
+    # 更新seat_map
+    for content_id in Constants.valid_rooms.keys():
+        seat_map, status = seat_booker.get_refresh_seat_map(content_id=content_id, max_retry_time=5)
+        if status == SeatBookerStatus.SUCCESS:
+            global_seat_map.map[str(content_id)].update(seat_map)
+    # 写入json文件
+    try:
+        with open(global_seat_map.seat_map_file, 'w') as f:
+            json.dump(global_seat_map.map, f)
+    except IOError as e:
+        app.logger.error(f"Write seat_map back to file failed (json.dump)! {e}")

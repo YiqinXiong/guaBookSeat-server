@@ -10,7 +10,7 @@ from flask_login import login_user, login_required, logout_user, current_user
 from guabookseat import app, db, scheduler, log_dir, log_file_name
 from guabookseat.constants import Constants
 from guabookseat.models import User, UserConfig
-from guabookseat.scheduled_jobs import call_seat_booker_func, auto_booking
+from guabookseat.scheduled_jobs import call_seat_booker_func, auto_booking, refresh_map
 from guabookseat.seatbooker.seat_booker import SeatBookerStatus
 
 
@@ -331,7 +331,8 @@ def show_tables():
     user_content = user_head + [(x.id, x.username, x.mail_address) for x in user_content]
 
     user_config_content = UserConfig.query.all()
-    user_config_head = [('设置ID', '用户ID', '学号', '密码', '自习室', '开始', '持续', '开始offset', '持续offset', '座位')]
+    user_config_head = [
+        ('设置ID', '用户ID', '学号', '密码', '自习室', '开始', '持续', '开始offset', '持续offset', '座位')]
     user_config_content = user_config_head + [
         (x.cid, x.id, x.student_id, x.student_pwd, Constants.valid_rooms[x.content_id], x.start_time,
          x.duration, x.start_time_delta_limit, x.duration_delta_limit, x.target_seat) for x in
@@ -356,3 +357,13 @@ def show_tables():
     }
 
     return render_template('show-tables.html', tables=tables)
+
+
+@app.route('/manual-refresh-seat-map')
+@login_required
+def manual_refresh_seat_map():
+    if request.method == "GET":
+        user_config = UserConfig.query.all()
+        refresh_map(conf_list=user_config)
+        flash("更新座位表完成!")
+    return redirect(url_for('show_tables'))

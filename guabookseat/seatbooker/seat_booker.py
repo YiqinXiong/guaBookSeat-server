@@ -2,23 +2,25 @@ import datetime
 import json
 import time
 from enum import Enum
-from random import randint
+from random import randint, sample
 from guabookseat.models import UserCookie
 from guabookseat.constants import Constants
-from guabookseat import db
+from guabookseat import db, global_seat_map
 
 import requests
 
 
 def get_start_time(conf_start_time):
-    # 获取当前时间
-    now = datetime.datetime.now()
     # 获取今日0点时间戳
     today = datetime.date.today()
     today_timestamp = int(time.mktime(today.timetuple()))
-    # 若今日未到MAX_END_TIME(刷新时间，浮动半小时)，则预约今日自习室，否则预约明日自习室
+    # 获取阈值时间戳，是当前时间戳和系统刷新时间戳中较小的一个
+    now_timestamp = int(time.time())
+    sys_timestamp = today_timestamp + 3600 * Constants.MAX_END_TIME
+    threshold_timestamp = min(now_timestamp, sys_timestamp)
+    # 若未到今日开始时间，则预约今日自习室，否则预约明日自习室
     today_start_time = today_timestamp + 3600 * conf_start_time
-    if (now.hour < Constants.MAX_END_TIME - 1) or (now.hour == Constants.MAX_END_TIME - 1 and now.minute < 30):
+    if today_start_time > threshold_timestamp:
         return today_start_time
     else:
         return today_start_time + 86400
@@ -48,6 +50,7 @@ class SeatBookerStatus(Enum):
     PROXY_ERROR = 11
     JSON_DECODE_ERROR = 12
     NO_NEED = 13
+    EXCEED_TIME = 14
 
 
 # SeatBooker类
@@ -114,6 +117,63 @@ class SeatBooker:
             user_cookie.set_cookie(self.session.cookies.get_dict(), self.username, self.uid)
             db.session.add(user_cookie)
             db.session.commit()
+
+    def set_target_seat(self):
+        seat_map = global_seat_map.get_map()[str(self.content_id)] if global_seat_map else None
+        if not seat_map:
+            self.logger.warning(f"UID:{self.username} Empty SeatMap!")
+            return SeatBookerStatus.UNKNOWN_ERROR
+        seat_info = {'content_id': self.content_id}
+        # 设置target_seat
+        if self.seat_id == 0:
+            # 随机选一个
+            seat_title = sample(seat_map.keys(), 1)[0]
+            seat_id = seat_map[seat_title]
+            seat_info['seat_title'] = seat_title
+            seat_info['seat_id'] = seat_id
+        else:
+            # 选指定位置
+            if str(self.seat_id) not in seat_map:
+                self.logger.warning(f"UID:{self.username} Not found target_seat in SeatMap!")
+                return SeatBookerStatus.UNKNOWN_ERROR
+            seat_id = seat_map[str(self.seat_id)]
+            seat_info['seat_title'] = self.seat_id
+            seat_info['seat_id'] = seat_id
+        self.logger.info(f"UID:{self.username} seat_info:{seat_info}!")
+        self.target_seat = str(seat_info['seat_id'])
+        self.target_seat_title = str(seat_info['seat_title'])
+        return SeatBookerStatus.SUCCESS
+
+    def get_refresh_seat_map(self, content_id, max_retry_time=5):
+        seat_map = {}
+        data = {
+            "beginTime": self.start_time,
+            "duration": 10800,
+            "num": 1,
+            "space_category[category_id]": self.category_id,
+            "space_category[content_id]": content_id
+        }
+        # POST search_seat
+        retry_time = 0
+        while retry_time <= max_retry_time:
+            status, response_data = self.get_remote_response(url=self.urls['search_seat'], method="post", data=data)
+            if status == SeatBookerStatus.SUCCESS:
+                break
+            retry_time += 1
+        if status != SeatBookerStatus.SUCCESS:
+            return seat_map, status
+        # 处理search_seat结果
+        if "data" not in response_data.keys():
+            self.logger.error(f"UID:{self.username} UNKNOWN_ERROR {response_data}")
+            return seat_map, SeatBookerStatus.UNKNOWN_ERROR
+        else:
+            res_data = response_data["data"]
+        # 返回 {seat_title: seat_id} 字典
+        for seat in res_data["POIs"]:
+            seat_title = seat['title']
+            seat_id = int(seat['id'])
+            seat_map[seat_title] = seat_id
+        return seat_map, SeatBookerStatus.SUCCESS
 
     def is_time_affordable(self, start_time_delta, duration_delta):
         # 检查start_time误差，前后波动最多conf['start_time_delta_limit']小时
@@ -297,6 +357,9 @@ class SeatBooker:
             if response_data["CODE"] == "ParamError":
                 if "已有预约" in response_data["MESSAGE"]:
                     return SeatBookerStatus.ALREADY_BOOKED
+                if "超出可预约时间范围" in response_data["MESSAGE"]:
+                    self.logger.debug(f"UID:{self.username} EXCEED_TIME {response_data['MESSAGE']}!")
+                    return SeatBookerStatus.EXCEED_TIME
                 self.logger.warning(f"UID:{self.username} PARAM_ERROR {response_data['MESSAGE']}!")
                 return SeatBookerStatus.PARAM_ERROR
             else:
@@ -412,10 +475,10 @@ class SeatBooker:
         stat = self.book_seat()
         while stat != SeatBookerStatus.SUCCESS:
             failed_time += 1
-            # 若已有预约，直接结束程序
-            if stat == SeatBookerStatus.ALREADY_BOOKED:
-                self.logger.error(f"UID:{self.username} ALREADY_BOOKED!")
-                return SeatBookerStatus.ALREADY_BOOKED
+            # 若已有预约则结束程序，若参数错误则直接返回
+            if stat == SeatBookerStatus.ALREADY_BOOKED or stat == SeatBookerStatus.PARAM_ERROR:
+                self.logger.error(f"UID:{self.username} {stat.name}!")
+                return stat
             # 失败max_failed_time次以上退出程序
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} BOOK_SEAT FAILED!")
