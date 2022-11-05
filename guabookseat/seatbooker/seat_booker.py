@@ -340,6 +340,10 @@ class SeatBooker:
         return SeatBookerStatus.SUCCESS
 
     def book_seat(self):
+        """
+        input: None
+        output: tuple[SeatBookerStatus, dict(history of booking)]
+        """
         data = {
             "beginTime": self.start_time + self.start_time_delta,
             "duration": self.duration + self.duration_delta,
@@ -349,29 +353,30 @@ class SeatBooker:
         # POST book_seat
         status, response_data = self.get_remote_response(url=self.urls['book_seat'], method="post", data=data)
         if status != SeatBookerStatus.SUCCESS:
-            return status
+            return status, None
         # 处理book_seat结果
         if response_data["CODE"] == "ok":
-            return SeatBookerStatus.SUCCESS
+            return SeatBookerStatus.SUCCESS, {
+                "status": '0',  # 状态：已预约
+                "time": str(data["beginTime"]),  # 预约时间戳
+                "duration": str(data["duration"]),  # 预约时长（秒）
+                "seatNum": self.target_seat_title,  # 预约座位号
+                "roomName": Constants.valid_rooms[self.content_id],  # 预约自习室名字
+                "id": int(response_data["DATA"]["bookingId"]),  # bookingId
+            }
         else:
             if response_data["CODE"] == "ParamError":
                 if "已有预约" in response_data["MESSAGE"]:
-                    return SeatBookerStatus.ALREADY_BOOKED
+                    self.logger.debug(f"UID:{self.username} ALREADY_BOOKED {response_data['MESSAGE']}!")
+                    return SeatBookerStatus.ALREADY_BOOKED, None
                 if "超出可预约时间范围" in response_data["MESSAGE"]:
                     self.logger.debug(f"UID:{self.username} EXCEED_TIME {response_data['MESSAGE']}!")
-                    return SeatBookerStatus.EXCEED_TIME
+                    return SeatBookerStatus.EXCEED_TIME, None
                 self.logger.warning(f"UID:{self.username} PARAM_ERROR {response_data['MESSAGE']}!")
-                return SeatBookerStatus.PARAM_ERROR
+                return SeatBookerStatus.PARAM_ERROR, None
             else:
                 self.logger.warning(f"UID:{self.username} UNKNOWN_ERROR {response_data}!")
-                return SeatBookerStatus.UNKNOWN_ERROR
-
-    def get_latest_record(self):
-        # GET get_my_booking_list
-        status, response_data = self.get_remote_response(url=self.urls['get_my_booking_list'], method="get")
-        if status != SeatBookerStatus.SUCCESS:
-            return status, None
-        return SeatBookerStatus.SUCCESS, response_data["content"]["defaultItems"][0]
+                return SeatBookerStatus.UNKNOWN_ERROR, None
 
     def get_my_booking_list(self):
         # GET get_my_booking_list
@@ -470,38 +475,27 @@ class SeatBooker:
         return SeatBookerStatus.SUCCESS
 
     def loop_book_seat(self, max_failed_time):
+        """
+        input: int(max_failed_time)
+        output: tuple[SeatBookerStatus, dict(history of booking)]
+        """
         # 若book_seat失败可以循环重试，每2s一次，最多允许失败max_failed_time次
         failed_time = 0
-        stat = self.book_seat()
+        stat, history_of_booking = self.book_seat()
         while stat != SeatBookerStatus.SUCCESS:
             failed_time += 1
             # 若已有预约则结束程序，若参数错误则直接返回
             if stat == SeatBookerStatus.ALREADY_BOOKED or stat == SeatBookerStatus.PARAM_ERROR:
-                self.logger.error(f"UID:{self.username} {stat.name}!")
-                return stat
+                return stat, history_of_booking
             # 失败max_failed_time次以上退出程序
             if failed_time > max_failed_time:
                 self.logger.error(f"UID:{self.username} BOOK_SEAT FAILED!")
-                return SeatBookerStatus.LOOP_FAILED
+                return SeatBookerStatus.LOOP_FAILED, history_of_booking
             # 重试等待
             time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
-            stat = self.book_seat()
+            stat, history_of_booking = self.book_seat()
         self.logger.info(f"UID:{self.username} BOOK_SEAT SUCCESS!")
-        return SeatBookerStatus.SUCCESS
-
-    def loop_get_latest_record(self, max_failed_time):
-        # 若get_latest_record失败可以循环重试，每2s一次，最多允许失败max_failed_time次
-        failed_time = 0
-        stat, latest_record = self.get_latest_record()
-        while stat != SeatBookerStatus.SUCCESS:
-            failed_time += 1
-            # 失败max_failed_time次以上退出get_latest_record流程
-            if failed_time > max_failed_time:
-                return SeatBookerStatus.LOOP_FAILED, None
-            # 重试等待
-            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
-            stat, latest_record = self.get_latest_record()
-        return SeatBookerStatus.SUCCESS, latest_record
+        return SeatBookerStatus.SUCCESS, history_of_booking
 
     def loop_checkin_booking(self, booking_id, max_failed_time):
         # 若checkin_booking失败可以循环重试，每2s一次，最多允许失败max_failed_time次
