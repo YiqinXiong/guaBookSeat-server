@@ -72,7 +72,7 @@ class UserCookie(db.Model):
         self.username = username
         self.uid = uid
         self.cookie = json.dumps(cookie)
-        self.expire_time = int(time.time()) + 3 * 24 * 3600  # cookie 3天后过期
+        self.expire_time = int(time.time()) + 7 * 24 * 3600  # cookie 7天后过期
 
     def is_expired(self):
         return time.time() > self.expire_time
