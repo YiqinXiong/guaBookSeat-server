@@ -17,11 +17,16 @@ def send_mail(title, body, receiver):
     if not receiver or type(receiver) != str or receiver == "":
         return
     msg = Message(subject=title, recipients=[receiver], body=body, sender=app.config['MAIL_DEFAULT_SENDER'])
-    try:
-        with app.app_context():
-            mail.send(msg)
-    except Exception as e:
-        app.logger.error(f"send_email raise an Exception:\n{e}")
+    retry_time = 0
+    while retry_time < 3:
+        try:
+            with app.app_context():
+                mail.send(msg)
+            return
+        except Exception as e:
+            app.logger.error(f"send_email raise an Exception:\n{e}")
+            time.sleep(retry_time * 5.0)
+        retry_time += 1
 
 
 def history_to_tuple(history):
