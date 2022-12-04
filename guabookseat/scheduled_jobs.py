@@ -207,8 +207,23 @@ def auto_booking(conf, receiver=None, max_retry_time=12):
             time.sleep(2)
     # 处理预约结果
     if res_book_seat == SeatBookerStatus.ALREADY_BOOKED:
-        app.logger.info(f"UID:{student_id} auto_booking quit with no need!")
-        return
+        last_record = seat_booker.loop_get_last_record(max_failed_time=10)
+        # 获取最后一个记录失败
+        if not last_record:
+            app.logger.info(f"UID:{student_id} auto_booking quit with no need (get last record failed)!")
+            return
+        if last_record.get("status") == "0":
+            start_timestamp_booking = seat_booker.start_time + seat_booker.start_time_delta
+            duration_sec_booking = seat_booker.duration + seat_booker.duration_delta
+            start_timestamp_last = int(last_record.get("time"))
+            duration_sec_last = int(last_record.get("duration"))
+            # 最后一个记录和订座请求差距大于20分钟，说明不是同一个请求
+            if abs(start_timestamp_booking - start_timestamp_last) > 1200 or abs(
+                    duration_sec_booking - duration_sec_last) > 1200:
+                app.logger.info(f"UID:{student_id} auto_booking quit with no need!")
+                return
+            # 最后一个记录和订座请求是同一个请求，说明已经约上了
+            res_book_seat, history_of_booking = SeatBookerStatus.SUCCESS, last_record
     if res_book_seat == SeatBookerStatus.SUCCESS:
         # 创建定时签到任务
         job_id = 'checkin_booking_' + str(history_of_booking["id"])

@@ -218,9 +218,9 @@ class SeatBooker:
         # 尝试post/get
         try:
             if method == "post":
-                response = self.session.post(url=url, data=data, proxies=self.session.proxies, timeout=(4.05, 8.05))
+                response = self.session.post(url=url, data=data, proxies=self.session.proxies, timeout=(3.05, 12.05))
             else:
-                response = self.session.get(url=url, proxies=self.session.proxies, timeout=(4.05, 8.05))
+                response = self.session.get(url=url, proxies=self.session.proxies, timeout=(3.05, 12.05))
         except requests.exceptions.ReadTimeout:
             self.logger.error(f"UID:{self.username} url:{url} {method} error:requests.exceptions.ReadTimeout")
             return SeatBookerStatus.TIME_OUT, None
@@ -398,6 +398,12 @@ class SeatBooker:
                 break
         return target_record
 
+    def get_last_record(self):
+        status, last_10_records = self.get_my_booking_list()
+        if status != SeatBookerStatus.SUCCESS:
+            return None
+        return last_10_records[0]
+
     def post_with_booking_id(self, url, booking_id):
         data = {
             'bookingId': str(booking_id),
@@ -513,3 +519,17 @@ class SeatBooker:
             time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
             stat = self.checkin_booking(booking_id=booking_id)
         return SeatBookerStatus.SUCCESS
+
+    def loop_get_last_record(self, max_failed_time):
+        # 若get_last_record失败可以循环重试，每2s一次，最多允许失败max_failed_time次
+        failed_time = 0
+        last_record = self.get_last_record()
+        while not last_record:
+            failed_time += 1
+            # 失败max_failed_time次以上退出checkin_booking流程
+            if failed_time > max_failed_time:
+                return None
+            # 重试等待
+            time.sleep(get_penalty_time(failed_time=failed_time, max_failed_time=max_failed_time))
+            last_record = self.get_last_record()
+        return last_record
